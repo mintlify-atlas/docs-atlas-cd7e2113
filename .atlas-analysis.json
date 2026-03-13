@@ -1,0 +1,125 @@
+{
+  "projectType": "cli-tool",
+  "projectName": "OpenAgreements",
+  "projectDescription": "Fill standard legal agreement templates and produce signable DOCX files covering NDAs, cloud terms, SAFEs, and NVCA financing documents.",
+  "theme": "linden",
+  "primaryColor": "#ababab",
+  "lightColor": "#3b3b3b",
+  "darkColor": "#dfdfdf",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "CLI Reference",
+            "pages": [
+              "cli/overview",
+              "cli/fill",
+              "cli/list",
+              "cli/validate",
+              "cli/recipe",
+              "cli/scan",
+              "cli/checklist"
+            ]
+          },
+          {
+            "group": "Templates",
+            "pages": [
+              "templates/overview",
+              "templates/catalog",
+              "templates/adding-templates",
+              "templates/recipes"
+            ]
+          },
+          {
+            "group": "Integrations",
+            "pages": [
+              "integrations/overview",
+              "integrations/claude-code",
+              "integrations/gemini",
+              "integrations/mcp-servers",
+              "integrations/workspace-management"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/compliance-skills",
+              "advanced/architecture",
+              "advanced/contributing",
+              "advanced/trust-checklist"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Core API",
+            "pages": [
+              "api/overview",
+              "api/fill-template",
+              "api/template-metadata",
+              "api/validation"
+            ]
+          },
+          {
+            "group": "Recipe Engine",
+            "pages": [
+              "api/recipes/overview",
+              "api/recipes/run-recipe",
+              "api/recipes/clean-document",
+              "api/recipes/patch-document"
+            ]
+          },
+          {
+            "group": "Checklist API",
+            "pages": [
+              "api/checklist/overview",
+              "api/checklist/build-context",
+              "api/checklist/patch-operations",
+              "api/checklist/import-export"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Fill 28+ standard legal templates with interactive CLI",
+    "Generate signable DOCX files preserving original formatting",
+    "Support for NDAs, cloud terms, SAFEs, and NVCA financing documents",
+    "AI agent integration (Claude Code, Gemini) with MCP servers",
+    "Recipe engine for non-redistributable templates (NVCA)",
+    "Workspace management for contract repositories",
+    "ISO 27001 and SOC 2 compliance skills",
+    "TypeScript library API for programmatic use"
+  ],
+  "publicApiSurface": [
+    "open-agreements fill <template>",
+    "open-agreements list",
+    "open-agreements validate [template]",
+    "open-agreements recipe clean <source>",
+    "open-agreements scan <docx-file>",
+    "open-agreements checklist <action>",
+    "fillTemplate(templateId, data, options)",
+    "loadMetadata(templateId)",
+    "validateTemplate(templateId)",
+    "runRecipe(recipeName, options)",
+    "listTemplateItems()",
+    "ClaudeCodeAdapter",
+    "@open-agreements/contracts-workspace",
+    "@open-agreements/contract-templates-mcp",
+    "@open-agreements/contracts-workspace-mcp"
+  ]
+}
