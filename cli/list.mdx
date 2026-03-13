@@ -1,0 +1,346 @@
+---
+title: list
+description: Show all available agreements (templates, external, and recipes)
+---
+
+The `list` command displays all available templates, external sources, and recipes with their metadata, field counts, and licensing information.
+
+## Syntax
+
+```bash
+open-agreements list [options]
+```
+
+## Options
+
+<ParamField path="--json" type="flag">
+  Output machine-readable JSON with full field definitions. Useful for programmatic access and AI agent integration.
+</ParamField>
+
+<ParamField path="--json-strict" type="flag">
+  Like `--json`, but exit with non-zero status if any metadata fails to load.
+</ParamField>
+
+<ParamField path="--templates-only" type="flag">
+  List only bundled templates. Excludes external templates and recipes.
+</ParamField>
+
+## Examples
+
+### Human-Readable Table
+
+```bash
+open-agreements list
+```
+
+**Output:**
+```
+Agreement                                Category      License        Fields   Source           URL
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+bonterms-cloud-terms-standard           cloud         CC BY 4.0      12/45    Bonterms         https://bonterms.com/...
+common-paper-mutual-nda                 nda           CC BY 4.0      8/15     Common Paper     https://commonpaper.com/...
+nvca-term-sheet                         financing     recipe         25/67    NVCA             https://nvca.org/...
+yc-safe-cap                            financing     CC BY-ND 4.0   5/8      Y Combinator     https://ycombinator.com/...
+```
+
+### JSON Output for Programmatic Use
+
+```bash
+open-agreements list --json
+```
+
+<CodeGroup>
+```json Output Structure
+{
+  "schema_version": 1,
+  "cli_version": "1.0.0",
+  "items": [
+    {
+      "name": "common-paper-mutual-nda",
+      "category": "nda",
+      "description": "Mutual Non-Disclosure Agreement",
+      "license": "CC BY 4.0",
+      "source_url": "https://commonpaper.com/standards/mutual-nda",
+      "source": "Common Paper",
+      "attribution_text": "Common Paper (https://commonpaper.com)",
+      "fields": [
+        {
+          "name": "party_1_name",
+          "required": true,
+          "description": "Legal name of first party"
+        },
+        {
+          "name": "party_2_name",
+          "required": true,
+          "description": "Legal name of second party"
+        },
+        {
+          "name": "governing_law",
+          "required": false,
+          "description": "Jurisdiction for governing law"
+        }
+      ]
+    }
+  ]
+}
+```
+
+```bash Query Specific Template
+# Get fields for a specific template
+open-agreements list --json | jq '.items[] | select(.name=="common-paper-mutual-nda")'
+```
+
+```bash Extract Required Fields
+# List all required fields for a template
+open-agreements list --json | jq '.items[] | select(.name=="common-paper-mutual-nda") | .fields[] | select(.required==true) | .name'
+```
+</CodeGroup>
+
+### Templates Only
+
+```bash
+open-agreements list --templates-only
+```
+
+Excludes external templates and recipes, showing only bundled templates.
+
+### Strict Mode
+
+```bash
+open-agreements list --json-strict
+```
+
+Exits with status code 1 if any template metadata fails to load. Useful in CI/CD pipelines:
+
+```bash
+# In CI script
+if ! open-agreements list --json-strict > templates.json; then
+  echo "Template metadata validation failed"
+  exit 1
+fi
+```
+
+## Output Fields
+
+### Table Format
+
+<ParamField path="Agreement" type="string">
+  Template identifier (used with `fill` command)
+</ParamField>
+
+<ParamField path="Category" type="string">
+  Template category: `nda`, `cloud`, `employment`, `contractor`, `financing`, etc.
+</ParamField>
+
+<ParamField path="License" type="string">
+  License type:
+  - `CC BY 4.0` - Internal templates (freely modifiable)
+  - `CC BY-ND 4.0` - External templates (no derivatives)
+  - `recipe` - Recipe-based (source downloaded at runtime)
+  - `recipe*` - Optional recipe (may not always be available)
+</ParamField>
+
+<ParamField path="Fields" type="string">
+  Field count in format `required/total`. Example: `8/15` means 8 required fields out of 15 total.
+</ParamField>
+
+<ParamField path="Source" type="string">
+  Template source organization
+</ParamField>
+
+<ParamField path="URL" type="string">
+  Source URL for template documentation or original content
+</ParamField>
+
+### JSON Format
+
+<ParamField path="schema_version" type="number">
+  JSON schema version (currently `1`)
+</ParamField>
+
+<ParamField path="cli_version" type="string">
+  CLI version that generated the output
+</ParamField>
+
+<ParamField path="items" type="array">
+  Array of template objects with full metadata
+</ParamField>
+
+#### Template Object Fields
+
+<ParamField path="name" type="string">
+  Template identifier
+</ParamField>
+
+<ParamField path="category" type="string">
+  Template category
+</ParamField>
+
+<ParamField path="description" type="string">
+  Template description or display name
+</ParamField>
+
+<ParamField path="license" type="string">
+  License identifier
+</ParamField>
+
+<ParamField path="source_url" type="string">
+  Source URL
+</ParamField>
+
+<ParamField path="source" type="string">
+  Source organization name
+</ParamField>
+
+<ParamField path="attribution_text" type="string">
+  Required attribution text
+</ParamField>
+
+<ParamField path="fields" type="array">
+  Array of field definitions with `name`, `required`, and `description` properties
+</ParamField>
+
+## Template Categories
+
+Templates are automatically categorized based on their identifier:
+
+- **nda** - Non-disclosure agreements
+- **cloud** - Cloud service agreements
+- **employment** - Employment offer letters and agreements
+- **contractor** - Independent contractor agreements
+- **financing** - Investment and financing documents
+- **saas** - Software as a Service agreements
+- **data** - Data processing agreements
+
+## Template Types
+
+The list includes three types of content:
+
+### Internal Templates
+
+- License: `CC BY 4.0`
+- Source: Common Paper, Bonterms, OpenAgreements
+- Storage: Bundled in package (`content/templates/`)
+- Modification: Freely modifiable
+
+### External Templates
+
+- License: `CC BY-ND 4.0`
+- Source: Y Combinator
+- Storage: Vendored in package (`content/external/`)
+- Modification: No derivatives allowed (filled output is transient)
+
+### Recipes
+
+- License: Varies (not redistributable)
+- Source: NVCA, others
+- Storage: Downloaded at runtime
+- Processing: Multi-stage pipeline (clean → patch → fill → verify)
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Discover Available Templates">
+    ```bash
+    open-agreements list
+    ```
+    
+    Browse templates in human-readable format.
+  </Accordion>
+
+  <Accordion title="AI Agent Integration">
+    ```bash
+    open-agreements list --json
+    ```
+    
+    Provides structured data for AI agents to discover templates and their required fields.
+  </Accordion>
+
+  <Accordion title="CI/CD Validation">
+    ```bash
+    open-agreements list --json-strict > templates.json
+    ```
+    
+    Validate all template metadata loads successfully.
+  </Accordion>
+
+  <Accordion title="Field Discovery">
+    ```bash
+    open-agreements list --json | jq '.items[] | select(.name=="template-id") | .fields'
+    ```
+    
+    Extract field definitions for a specific template.
+  </Accordion>
+</AccordionGroup>
+
+## Error Handling
+
+### Missing Metadata (Table Format)
+
+If a template's metadata fails to load, it appears with `ERROR` in the license column:
+
+```
+template-with-error                     nda           ERROR          —        —                Could not load metadata
+```
+
+### Missing Metadata (JSON Strict)
+
+With `--json-strict`, metadata errors are reported to stderr and the command exits with status 1:
+
+```
+error: template template-name: Invalid metadata format
+```
+
+### No Templates Found
+
+```
+No agreements found.
+```
+
+This typically indicates:
+- Empty or missing content directories
+- Incorrect `OPEN_AGREEMENTS_CONTENT_ROOTS` configuration
+- Package installation issue
+
+## Integration Examples
+
+<CodeGroup>
+```bash Count Templates by Category
+open-agreements list --json | jq '.items | group_by(.category) | map({category: .[0].category, count: length})'
+```
+
+```bash Find Templates with Fewer Than 10 Required Fields
+open-agreements list --json | jq '.items[] | select((.fields | map(select(.required)) | length) < 10) | .name'
+```
+
+```python Python Integration
+import subprocess
+import json
+
+result = subprocess.run(
+    ['open-agreements', 'list', '--json'],
+    capture_output=True,
+    text=True
+)
+
+data = json.loads(result.stdout)
+for template in data['items']:
+    print(f"{template['name']}: {template['description']}")
+```
+
+```javascript Node.js Integration
+import { execSync } from 'child_process';
+
+const output = execSync('open-agreements list --json', { encoding: 'utf-8' });
+const data = JSON.parse(output);
+
+data.items.forEach(template => {
+  console.log(`${template.name}: ${template.description}`);
+});
+```
+</CodeGroup>
+
+## See Also
+
+- [fill](/cli/fill) - Fill templates with data
+- [validate](/cli/validate) - Validate template structure

@@ -1,0 +1,473 @@
+---
+title: cleanDocument()
+description: "Remove footnotes, drafting notes, and commentary from source documents (Stage 1 of recipe pipeline)"
+---
+
+## Function Signature
+
+```typescript
+async function cleanDocument(
+  inputPath: string,
+  outputPath: string,
+  config: CleanConfig,
+  options?: CleanOptions
+): Promise<CleanResult>
+```
+
+Cleans a DOCX document by removing content that shouldn't appear in the filled output:
+- Footnotes and footnote references
+- Pattern-matched paragraphs (drafting notes, comments)
+- Multi-paragraph ranges (preliminary sections, comment blocks)
+- Specified OOXML parts (footers, headers)
+
+Operates at the OOXML level to preserve formatting of retained content. Processes all general OOXML text parts (document, headers, footers, endnotes).
+
+## Import
+
+```typescript
+import { cleanDocument } from '@openagreements/core';
+```
+
+## Parameters
+
+<ParamField path="inputPath" type="string" required>
+  Path to the input DOCX file to clean
+  
+  ```typescript
+  inputPath: '/path/to/source.docx'
+  ```
+</ParamField>
+
+<ParamField path="outputPath" type="string" required>
+  Path where the cleaned DOCX file will be written
+  
+  ```typescript
+  outputPath: '/tmp/cleaned.docx'
+  ```
+</ParamField>
+
+<ParamField path="config" type="CleanConfig" required>
+  Configuration object specifying what content to remove
+  
+  ```typescript
+  config: {
+    removeFootnotes: true,
+    removeParagraphPatterns: ['^Note to Drafter:'],
+    removeRanges: [],
+    clearParts: []
+  }
+  ```
+</ParamField>
+
+<ParamField path="options" type="CleanOptions">
+  Optional configuration for guidance extraction and staleness detection
+  
+  ```typescript
+  options: {
+    extractGuidance: true,
+    sourceHash: 'sha256...',
+    configHash: 'sha256...'
+  }
+  ```
+</ParamField>
+
+### CleanConfig
+
+<ParamField path="removeFootnotes" type="boolean" default="false">
+  When `true`, removes all footnotes from `word/footnotes.xml` (except separator and continuationSeparator) and removes all `<w:footnoteReference>` elements from text parts.
+  
+  ```typescript
+  removeFootnotes: true
+  ```
+</ParamField>
+
+<ParamField path="removeParagraphPatterns" type="string[]" default="[]">
+  Array of regular expression patterns. Any paragraph whose text matches one of these patterns (case-insensitive) will be removed.
+  
+  ```typescript
+  removeParagraphPatterns: [
+    '^Note to Drafter:',
+    '^Preliminary Note\\b',
+    '^Comment:'
+  ]
+  ```
+</ParamField>
+
+<ParamField path="removeRanges" type="Array<{start: string, end: string}>" default="[]">
+  Array of range specifications. Each range removes all paragraphs from the first paragraph matching `start` through the first subsequent paragraph matching `end` (inclusive). All occurrences of each range pattern are matched, not just the first.
+  
+  ```typescript
+  removeRanges: [
+    {
+      start: '^MODEL INDEMNIFICATION AGREEMENT$',
+      end: 'against their own directors and officers\\.'
+    },
+    {
+      start: '^\\[Comment:',
+      end: '\\]\\s*$'
+    }
+  ]
+  ```
+</ParamField>
+
+<ParamField path="clearParts" type="string[]" default="[]">
+  Array of OOXML part filenames to clear entirely. The part will be replaced with minimal valid XML (a single empty paragraph).
+  
+  ```typescript
+  clearParts: ['word/footer1.xml', 'word/header2.xml']
+  ```
+</ParamField>
+
+### CleanOptions
+
+<ParamField path="extractGuidance" type="boolean" default="false">
+  When `true`, captures the text content of all removed elements before deletion and returns them as structured guidance data in the result.
+  
+  ```typescript
+  extractGuidance: true
+  ```
+</ParamField>
+
+<ParamField path="sourceHash" type="string">
+  SHA-256 hash of the source DOCX file, used for staleness detection in the guidance output. If either source or config hash changes, guidance should be re-extracted.
+  
+  ```typescript
+  sourceHash: 'f9b61b4d8e7c...'
+  ```
+</ParamField>
+
+<ParamField path="configHash" type="string">
+  SHA-256 hash of the clean.json config file, used for staleness detection in the guidance output.
+  
+  ```typescript
+  configHash: 'b77c2d27a3f1...'
+  ```
+</ParamField>
+
+## Return Value
+
+<ResponseField name="CleanResult" type="object">
+  Result object containing output path and optional guidance data
+</ResponseField>
+
+<ResponseField name="outputPath" type="string">
+  Absolute path to the cleaned output DOCX file
+</ResponseField>
+
+<ResponseField name="guidance" type="GuidanceOutput | undefined">
+  Structured guidance data containing all removed content (only present if `extractGuidance: true`)
+  
+  ```typescript
+  {
+    extractedFrom: {
+      sourceHash: 'f9b61b4d...',
+      configHash: 'b77c2d27...'
+    },
+    entries: [
+      {
+        source: 'footnote',
+        part: 'word/footnotes.xml',
+        index: 0,
+        text: 'See Delaware General Corporation Law § 145.'
+      },
+      {
+        source: 'pattern',
+        part: 'word/document.xml',
+        index: 1,
+        text: 'Note to Drafter: Consider state-specific requirements.'
+      },
+      {
+        source: 'range',
+        part: 'word/document.xml',
+        index: 2,
+        text: 'MODEL INDEMNIFICATION AGREEMENT',
+        groupId: 'range-2'
+      }
+    ]
+  }
+  ```
+</ResponseField>
+
+### GuidanceEntry
+
+<ResponseField name="source" type="'footnote' | 'pattern' | 'range'">
+  How the content was removed
+</ResponseField>
+
+<ResponseField name="part" type="string">
+  OOXML part path the content came from (e.g. `word/document.xml`, `word/footnotes.xml`)
+</ResponseField>
+
+<ResponseField name="index" type="number">
+  Global extraction order (preserves document position)
+</ResponseField>
+
+<ResponseField name="text" type="string">
+  The removed text content
+</ResponseField>
+
+<ResponseField name="groupId" type="string | undefined">
+  Shared identifier for entries from the same range match (range entries only)
+</ResponseField>
+
+## Examples
+
+### Basic Cleaning
+
+```typescript
+import { cleanDocument, loadCleanConfig } from '@openagreements/core';
+import { resolveRecipeDir } from '@openagreements/core/utils';
+
+const recipeDir = resolveRecipeDir('nvca-voting-agreement');
+const config = loadCleanConfig(recipeDir);
+
+const result = await cleanDocument(
+  '/path/to/source.docx',
+  '/tmp/cleaned.docx',
+  config
+);
+
+console.log(`Cleaned document written to: ${result.outputPath}`);
+```
+
+### Remove Footnotes Only
+
+```typescript
+const result = await cleanDocument(
+  '/path/to/source.docx',
+  '/tmp/cleaned.docx',
+  {
+    removeFootnotes: true,
+    removeParagraphPatterns: [],
+    removeRanges: [],
+    clearParts: []
+  }
+);
+```
+
+### Remove Drafting Notes
+
+```typescript
+const result = await cleanDocument(
+  '/path/to/source.docx',
+  '/tmp/cleaned.docx',
+  {
+    removeFootnotes: false,
+    removeParagraphPatterns: [
+      '^Note to Drafter:',
+      '^Preliminary Note\\b',
+      '^\\[Comment:'
+    ],
+    removeRanges: [],
+    clearParts: []
+  }
+);
+```
+
+### Remove Multi-Paragraph Commentary
+
+```typescript
+const result = await cleanDocument(
+  '/path/to/source.docx',
+  '/tmp/cleaned.docx',
+  {
+    removeFootnotes: true,
+    removeParagraphPatterns: [],
+    removeRanges: [
+      {
+        start: '^MODEL INDEMNIFICATION AGREEMENT$',
+        end: 'against their own directors and officers\\.'
+      },
+      {
+        start: '^\\[Comment:',
+        end: '\\]\\s*$'
+      }
+    ],
+    clearParts: []
+  }
+);
+```
+
+### Extract Guidance
+
+```typescript
+import { createHash } from 'crypto';
+import { readFileSync } from 'fs';
+
+// Compute hashes for staleness detection
+const sourceBuffer = readFileSync('/path/to/source.docx');
+const sourceHash = createHash('sha256').update(sourceBuffer).digest('hex');
+
+const configBuffer = readFileSync('/path/to/clean.json');
+const configHash = createHash('sha256').update(configBuffer).digest('hex');
+
+const result = await cleanDocument(
+  '/path/to/source.docx',
+  '/tmp/cleaned.docx',
+  config,
+  {
+    extractGuidance: true,
+    sourceHash,
+    configHash
+  }
+);
+
+if (result.guidance) {
+  console.log(`Extracted ${result.guidance.entries.length} guidance entries`);
+  
+  // Save guidance (local-only for non-redistributable sources)
+  writeFileSync(
+    '/tmp/guidance.json',
+    JSON.stringify(result.guidance, null, 2)
+  );
+  
+  // Group by source type
+  const footnotes = result.guidance.entries.filter(e => e.source === 'footnote');
+  const notes = result.guidance.entries.filter(e => e.source === 'pattern');
+  const ranges = result.guidance.entries.filter(e => e.source === 'range');
+  
+  console.log(`Footnotes: ${footnotes.length}`);
+  console.log(`Notes: ${notes.length}`);
+  console.log(`Ranges: ${ranges.length}`);
+}
+```
+
+### Clear Footer Parts
+
+```typescript
+const result = await cleanDocument(
+  '/path/to/source.docx',
+  '/tmp/cleaned.docx',
+  {
+    removeFootnotes: false,
+    removeParagraphPatterns: [],
+    removeRanges: [],
+    clearParts: ['word/footer1.xml', 'word/footer2.xml']
+  }
+);
+```
+
+## Implementation Details
+
+### OOXML Processing
+
+The cleaner processes all general OOXML text parts:
+- `word/document.xml` (main document)
+- `word/header*.xml` (headers)
+- `word/footer*.xml` (footers)
+- `word/endnotes.xml` (endnotes)
+
+Footnotes are handled separately because they require special logic to preserve `separator` and `continuationSeparator` footnotes.
+
+### Footnote Removal
+
+When `removeFootnotes: true`:
+1. Removes all `<w:footnoteReference>` elements (and their parent runs) from text parts
+2. Removes all footnotes from `word/footnotes.xml` except:
+   - `type="separator"` footnotes
+   - `type="continuationSeparator"` footnotes
+
+This preserves Word's internal footnote infrastructure while removing user content.
+
+### Pattern Matching
+
+Paragraph patterns are compiled as case-insensitive regular expressions. A paragraph is removed if its text content matches any pattern.
+
+Text extraction:
+- Collects all `<w:t>` elements in the paragraph
+- Joins them into a single string
+- Trims whitespace
+- Tests against each pattern
+
+### Range Deletion
+
+Ranges scan paragraphs sequentially:
+1. When a paragraph matches `start`, begin collecting
+2. Continue collecting paragraphs
+3. When a paragraph matches `end`, remove all collected paragraphs (inclusive) and stop
+4. Resume scanning from next paragraph
+5. Multiple ranges of the same pattern can be matched
+
+### Guidance Extraction
+
+When `extractGuidance: true`:
+
+1. **Footnotes**: Ordered by `<w:footnoteReference>` occurrence in `word/document.xml`
+2. **Patterns**: Ordered by document position
+3. **Ranges**: Grouped by range match with shared `groupId`
+
+All entries include a global `index` that preserves overall document order.
+
+### Zip Handling
+
+The cleaner rebuilds the ZIP from scratch using `addFile()` to avoid adm-zip data descriptor issues. Some DOCX files use streaming flags (bit 3) which adm-zip's `updateFile/writeZip/toBuffer` handle incorrectly.
+
+## Use Cases
+
+### Recipe Pipeline
+
+This is Stage 1 of the recipe pipeline, typically followed by [patchDocument()](/api/recipes/patch-document):
+
+```typescript
+import { cleanDocument, patchDocument } from '@openagreements/core';
+
+// Stage 1: Clean
+const cleanResult = await cleanDocument(
+  'source.docx',
+  'cleaned.docx',
+  cleanConfig
+);
+
+// Stage 2: Patch
+await patchDocument(
+  cleanResult.outputPath,
+  'patched.docx',
+  replacements
+);
+```
+
+### Standalone Cleaning
+
+You can use `cleanDocument()` independently to prepare any DOCX file:
+
+```typescript
+// Remove footnotes from any document
+const result = await cleanDocument(
+  'document-with-footnotes.docx',
+  'document-without-footnotes.docx',
+  { removeFootnotes: true, removeParagraphPatterns: [], removeRanges: [], clearParts: [] }
+);
+```
+
+### Guidance Preservation
+
+Extract expert commentary before removing it:
+
+```typescript
+const result = await cleanDocument(
+  'nvca-source.docx',
+  'cleaned.docx',
+  config,
+  { extractGuidance: true, sourceHash, configHash }
+);
+
+// Use guidance to train AI or inform users
+if (result.guidance) {
+  for (const entry of result.guidance.entries) {
+    if (entry.source === 'footnote') {
+      console.log('Expert note:', entry.text);
+    }
+  }
+}
+```
+
+## Related Functions
+
+- [patchDocument()](/api/recipes/patch-document) - Stage 2: Patch placeholders
+- [runRecipe()](/api/recipes/run-recipe) - Execute full pipeline
+- [loadCleanConfig()](/api/template-metadata) - Load clean.json configuration
+
+## See Also
+
+- [Recipe Engine Overview](/api/recipes/overview) - Understand the recipe system
+- [Adding Recipes Guide](https://github.com/openagreements/openagreements/blob/main/docs/adding-recipes.md) - Create clean.json configurations

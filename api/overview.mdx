@@ -1,0 +1,209 @@
+---
+title: "API Overview"
+description: "Use OpenAgreements as a TypeScript library in your applications"
+---
+
+# API Overview
+
+OpenAgreements exports a TypeScript API for programmatic use as a library. Import functions and types to fill templates, validate documents, and manage metadata directly from your Node.js applications.
+
+## Installation
+
+Install OpenAgreements as a dependency in your project:
+
+<Tabs>
+  <Tab title="npm">
+    ```bash
+    npm install open-agreements
+    ```
+  </Tab>
+  <Tab title="yarn">
+    ```bash
+    yarn add open-agreements
+    ```
+  </Tab>
+  <Tab title="pnpm">
+    ```bash
+    pnpm add open-agreements
+    ```
+  </Tab>
+</Tabs>
+
+## Requirements
+
+- **Node.js**: Version 20 or higher
+- **TypeScript**: Version 5.7+ recommended (optional, but provides full type safety)
+
+## Package Information
+
+<ParamField path="name" type="string">
+  `open-agreements`
+</ParamField>
+
+<ParamField path="version" type="string">
+  `0.4.0`
+</ParamField>
+
+<ParamField path="license" type="string">
+  MIT
+</ParamField>
+
+<ParamField path="repository" type="string">
+  [github.com/open-agreements/open-agreements](https://github.com/open-agreements/open-agreements)
+</ParamField>
+
+## Basic Usage
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { fillTemplate, loadMetadata } from 'open-agreements';
+    import { join } from 'node:path';
+
+    async function fillNDA() {
+      const templateDir = join(process.cwd(), 'content', 'mutual-nda');
+      
+      const result = await fillTemplate({
+        templateDir,
+        values: {
+          party_1_name: 'Acme Corp',
+          party_2_name: 'Widget Inc',
+          effective_date: '2024-03-15',
+        },
+        outputPath: './output/nda.docx',
+      });
+      
+      console.log(`Document created: ${result.outputPath}`);
+      console.log(`Fields used: ${result.fieldsUsed.join(', ')}`);
+    }
+
+    fillNDA().catch(console.error);
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { fillTemplate } from 'open-agreements';
+    import { join } from 'node:path';
+
+    async function fillNDA() {
+      const templateDir = join(process.cwd(), 'content', 'mutual-nda');
+      
+      const result = await fillTemplate({
+        templateDir,
+        values: {
+          party_1_name: 'Acme Corp',
+          party_2_name: 'Widget Inc',
+          effective_date: '2024-03-15',
+        },
+        outputPath: './output/nda.docx',
+      });
+      
+      console.log(`Document created: ${result.outputPath}`);
+      console.log(`Fields used: ${result.fieldsUsed.join(', ')}`);
+    }
+
+    fillNDA().catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+## Core API Modules
+
+<CardGroup cols={2}>
+  <Card title="Template Filling" icon="file-pen" href="/api/fill-template">
+    Fill templates with data and generate DOCX files
+  </Card>
+  <Card title="Metadata Management" icon="info-circle" href="/api/template-metadata">
+    Load and validate template metadata schemas
+  </Card>
+  <Card title="Validation" icon="shield-check" href="/api/validation">
+    Validate templates, licenses, and output documents
+  </Card>
+  <Card title="Recipe Engine" icon="wand-magic-sparkles" href="/api/recipes/overview">
+    Transform and process non-redistributable templates
+  </Card>
+</CardGroup>
+
+## Type Safety
+
+All exported functions and types include full TypeScript definitions. Import types alongside functions for complete type safety:
+
+```typescript
+import { 
+  fillTemplate, 
+  type FillOptions, 
+  type FillResult,
+  type TemplateMetadata,
+  type FieldDefinition 
+} from 'open-agreements';
+```
+
+## Module Exports
+
+The package uses ES modules exclusively. All exports are available from the main entry point:
+
+```typescript
+import { /* any exported function or type */ } from 'open-agreements';
+```
+
+<Note>
+OpenAgreements requires Node.js 20 or higher and uses ES modules. CommonJS is not supported.
+</Note>
+
+## Error Handling
+
+API functions throw errors for invalid inputs or file system issues. Use try-catch blocks or `.catch()` handlers:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { fillTemplate } from 'open-agreements';
+
+    try {
+      const result = await fillTemplate({
+        templateDir: './templates/mutual-nda',
+        values: { party_1_name: 'Acme' },
+        outputPath: './output.docx',
+      });
+      console.log('Success:', result);
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error('Failed to fill template:', error.message);
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { fillTemplate } from 'open-agreements';
+
+    try {
+      const result = await fillTemplate({
+        templateDir: './templates/mutual-nda',
+        values: { party_1_name: 'Acme' },
+        outputPath: './output.docx',
+      });
+      console.log('Success:', result);
+    } catch (error) {
+      console.error('Failed to fill template:', error.message);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Fill Templates" icon="file-pen" href="/api/fill-template">
+    Learn how to use fillTemplate() with FillOptions
+  </Card>
+  <Card title="Load Metadata" icon="database" href="/api/template-metadata">
+    Work with template metadata and field definitions
+  </Card>
+  <Card title="Validate Documents" icon="check-circle" href="/api/validation">
+    Validate templates, licenses, and rendered output
+  </Card>
+  <Card title="Recipe Engine" icon="magic" href="/api/recipes/overview">
+    Transform templates with the recipe system
+  </Card>
+</CardGroup>

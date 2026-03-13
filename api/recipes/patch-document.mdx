@@ -1,0 +1,498 @@
+---
+title: patchDocument()
+description: "Transform source placeholders into template tags (Stage 2 of recipe pipeline)"
+---
+
+## Function Signature
+
+```typescript
+async function patchDocument(
+  inputPath: string,
+  outputPath: string,
+  replacements: Record<string, string>,
+  options?: PatchOptions
+): Promise<string>
+```
+
+Patches a DOCX document by replacing bracketed placeholders with template tags. Handles complex scenarios like:
+- **Cross-run replacements** where Word splits placeholder text across multiple XML elements
+- **Context-aware replacements** in table rows
+- **Nth-occurrence targeting** for repeated placeholders
+- **Surgical replacement** preserving formatting on context text
+
+Operates at the OOXML level using a char_map algorithm to handle text split across `<w:r>` (run) elements.
+
+## Import
+
+```typescript
+import { patchDocument } from '@openagreements/core';
+```
+
+## Parameters
+
+<ParamField path="inputPath" type="string" required>
+  Path to the input DOCX file (typically the cleaned document from Stage 1)
+  
+  ```typescript
+  inputPath: '/tmp/cleaned.docx'
+  ```
+</ParamField>
+
+<ParamField path="outputPath" type="string" required>
+  Path where the patched DOCX file will be written
+  
+  ```typescript
+  outputPath: '/tmp/patched.docx'
+  ```
+</ParamField>
+
+<ParamField path="replacements" type="Record<string, string>" required>
+  Mapping of source placeholders to template tags. Supports three key syntax types:
+  
+  ```typescript
+  replacements: {
+    // Simple: replaces all occurrences
+    '[Company Name]': '{company_name}',
+    
+    // Context: replaces only in matching table rows
+    'Investor Name > [____________]': '{investor_name}',
+    
+    // Nth: replaces specific occurrence
+    '[____________]#2': '{second_blank}'
+  }
+  ```
+</ParamField>
+
+<ParamField path="options" type="PatchOptions">
+  Optional configuration for replacement styling
+  
+  ```typescript
+  options: {
+    replacementColor: '000000'  // Black text
+  }
+  ```
+</ParamField>
+
+### PatchOptions
+
+<ParamField path="replacementColor" type="string">
+  Hex color code (e.g. `"000000"` for black) to apply to replacement text. When set, the patcher explicitly sets `<w:color>` on runs that receive replacement text, overriding any inherited placeholder styling (e.g. gray).
+  
+  ```typescript
+  replacementColor: '000000'  // Override gray placeholder text with black
+  ```
+</ParamField>
+
+## Return Value
+
+Returns a `Promise<string>` containing the absolute path to the patched output file (same as `outputPath` parameter).
+
+## Replacement Key Syntax
+
+The patcher supports three key formats:
+
+### 1. Simple Keys
+
+Replaces all occurrences of the search text:
+
+```typescript
+{
+  '[Company Name]': '{company_name}',
+  '[Date]': '{effective_date}'
+}
+```
+
+Processing order: longest keys first (automatic).
+
+### 2. Context Keys (Table Row Matching)
+
+Replaces only in table rows where the first cell contains the context text:
+
+```typescript
+{
+  'Investor Name > [____________]': '{investor_name}',
+  'Purchase Price > $[_________]': '${purchase_price}'
+}
+```
+
+**Format**: `"context text > search text"`
+
+Use case: Disambiguating generic placeholders like `[____________]` that appear multiple times with different meanings.
+
+### 3. Nth-Occurrence Keys
+
+Replaces only the Nth occurrence of the search text (1-indexed):
+
+```typescript
+{
+  '[____________]#1': '{company_name}',
+  '[____________]#2': '{investor_name}',
+  '[____________]#3': '{key_holder_name}'
+}
+```
+
+**Format**: `"search text#N"`
+
+Occurrences are counted across all OOXML text parts (document, headers, footers) in document order.
+
+## Processing Order
+
+Keys are processed in three phases to ensure qualified rules claim their targets before simple rules:
+
+1. **Context keys** (table row matching) - longest first
+2. **Nth-occurrence keys** - by search text length, then by N ascending
+3. **Simple keys** (all occurrences) - longest first
+
+This prevents simple keys from replacing placeholders that should be handled by qualified rules.
+
+## Examples
+
+### Basic Replacement
+
+```typescript
+import { patchDocument } from '@openagreements/core';
+
+const result = await patchDocument(
+  '/tmp/cleaned.docx',
+  '/tmp/patched.docx',
+  {
+    '[Company Name]': '{company_name}',
+    '[Date]': '{effective_date}',
+    '[Amended and Restated]': '{amended_restated}'
+  }
+);
+
+console.log(`Patched document: ${result}`);
+```
+
+### Context-Aware Replacement
+
+```typescript
+// Disambiguate generic underscores in a table
+const result = await patchDocument(
+  '/tmp/cleaned.docx',
+  '/tmp/patched.docx',
+  {
+    'Company Name > [____________]': '{company_name}',
+    'Investor Name > [____________]': '{investor_name}',
+    'Key Holder > [____________]': '{key_holder_name}'
+  }
+);
+```
+
+Table structure:
+```
+| Company Name   | [____________] |
+| Investor Name  | [____________] |
+| Key Holder     | [____________] |
+```
+
+After patching:
+```
+| Company Name   | {company_name}   |
+| Investor Name  | {investor_name}  |
+| Key Holder     | {key_holder_name}|
+```
+
+### Nth-Occurrence Replacement
+
+```typescript
+// Replace first 3 occurrences of a repeated placeholder
+const result = await patchDocument(
+  '/tmp/cleaned.docx',
+  '/tmp/patched.docx',
+  {
+    '[____________]#1': '{company_name}',
+    '[____________]#2': '{investor_name}',
+    '[____________]#3': '{key_holder_name}',
+    // Leave remaining [____________] as-is
+  }
+);
+```
+
+### Surgical Replacement (Context Preservation)
+
+```typescript
+// Include context text in both key and value
+const result = await patchDocument(
+  '/tmp/cleaned.docx',
+  '/tmp/patched.docx',
+  {
+    'among [____________], a Delaware': 'among {company_name}, a Delaware'
+  }
+);
+```
+
+The patcher detects the common prefix (`"among "`) and suffix (`", a Delaware"`):
+- Only `[____________]` → `{company_name}` is modified in the XML
+- Formatting on `"among "` and `", a Delaware"` is preserved
+
+This is **automatic** - just include the same context text in both key and value.
+
+### Color Override
+
+```typescript
+// Replace gray placeholder text with black template tags
+const result = await patchDocument(
+  '/tmp/cleaned.docx',
+  '/tmp/patched.docx',
+  {
+    '[Company Name]': '{company_name}'
+  },
+  {
+    replacementColor: '000000'  // Black
+  }
+);
+```
+
+### Load from Recipe
+
+```typescript
+import { patchDocument } from '@openagreements/core';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
+const recipeDir = '/path/to/content/recipes/nvca-voting-agreement';
+const replacements = JSON.parse(
+  readFileSync(join(recipeDir, 'replacements.json'), 'utf-8')
+);
+
+const result = await patchDocument(
+  '/tmp/cleaned.docx',
+  '/tmp/patched.docx',
+  replacements
+);
+```
+
+## Implementation Details
+
+### Char_Map Algorithm
+
+Word often splits placeholder text across multiple `<w:r>` (run) elements for styling or performance reasons. For example, `[Company Name]` might be split as:
+
+```xml
+<w:r><w:t>[Company</w:t></w:r>
+<w:r><w:t> Name]</w:t></w:r>
+```
+
+The patcher uses a **char_map** approach:
+
+1. Collect all runs in the paragraph
+2. Build a character-level map: `fullText` + `charMap`
+3. Search for the key in `fullText`
+4. Use `charMap` to determine which runs contain the matched characters
+5. Update those runs' text content
+6. Remove empty runs that are safe to remove
+
+This handles cross-run replacements seamlessly.
+
+### Surgical Replacement
+
+When a key and value share common prefix/suffix:
+
+```typescript
+{
+  'among [____________], a Delaware': 'among {company_name}, a Delaware'
+}
+```
+
+The patcher:
+1. Computes `commonPrefixLen` = 6 (`"among "`)
+2. Computes `commonSuffixLen` = 13 (`", a Delaware"`)
+3. Only replaces the middle: `[____________]` → `{company_name}`
+4. Preserves formatting on `"among "` and `", a Delaware"`
+
+This is automatic - no special syntax needed.
+
+### Run Safety
+
+Before removing empty runs, the patcher checks if the run is safe to remove:
+
+- **Safe**: Run contains only `<w:rPr>` (properties) and `<w:t>` (text)
+- **Unsafe**: Run contains `<w:drawing>`, `<w:pict>`, `<w:footnoteReference>`, `<w:br>`, etc.
+
+Unsafe runs are preserved even if their text is empty, because they carry visual or structural meaning.
+
+### OOXML Parts Processed
+
+The patcher processes all general OOXML text parts:
+- `word/document.xml` (main document)
+- `word/header*.xml` (headers)
+- `word/footer*.xml` (footers)
+- `word/endnotes.xml` (endnotes)
+
+This ensures placeholders in headers/footers are also replaced.
+
+### Nested Runs
+
+The patcher collects runs recursively to handle wrapper elements:
+
+```xml
+<w:p>
+  <w:hyperlink>
+    <w:r><w:t>[Company</w:t></w:r>
+    <w:r><w:t> Name]</w:t></w:r>
+  </w:hyperlink>
+</w:p>
+```
+
+Runs inside `<w:hyperlink>`, `<w:ins>`, `<w:del>`, `<w:smartTag>`, etc. are collected in document order.
+
+## Error Handling
+
+### Infinite Loop Protection
+
+If a replacement value contains the search key, it could cause an infinite loop:
+
+```typescript
+{
+  '[Name]': '[Name] {suffix}'  // Bad: value contains key
+}
+```
+
+The patcher detects this:
+- Maximum 200 replacements per key per paragraph
+- Throws error if limit exceeded or no progress made
+
+**Solution**: Use different text in the replacement value, or use nth-occurrence keys.
+
+### No OOXML Parts Found
+
+If the DOCX has no text parts, the patcher throws:
+
+```
+Error: No OOXML text parts found in DOCX
+```
+
+This typically indicates a corrupted or invalid DOCX file.
+
+## Use Cases
+
+### Recipe Pipeline
+
+This is Stage 2 of the recipe pipeline, typically after [cleanDocument()](/api/recipes/clean-document):
+
+```typescript
+import { cleanDocument, patchDocument, fillTemplate } from '@openagreements/core';
+
+// Stage 1: Clean
+const cleanResult = await cleanDocument(
+  'source.docx',
+  'cleaned.docx',
+  cleanConfig
+);
+
+// Stage 2: Patch
+const patchResult = await patchDocument(
+  cleanResult.outputPath,
+  'patched.docx',
+  replacements
+);
+
+// Stage 3: Fill
+const fillResult = await fillTemplate({
+  templatePath: patchResult,
+  outputPath: 'output.docx',
+  values: { company_name: 'Acme Corp', ... }
+});
+```
+
+### Standalone Patching
+
+You can use `patchDocument()` independently to transform any DOCX:
+
+```typescript
+// Transform a form with placeholders into a fillable template
+const result = await patchDocument(
+  'form-with-placeholders.docx',
+  'fillable-template.docx',
+  {
+    '[First Name]': '{first_name}',
+    '[Last Name]': '{last_name}',
+    '[Date]': '{effective_date}'
+  }
+);
+```
+
+### Disambiguation Patterns
+
+Use context and nth keys to handle ambiguous placeholders:
+
+```typescript
+const result = await patchDocument(
+  'contract.docx',
+  'patched.docx',
+  {
+    // Context: in signature block table
+    'Company Representative > [____________]': '{company_rep_name}',
+    'Investor Representative > [____________]': '{investor_rep_name}',
+    
+    // Nth: in body paragraphs (first = effective date, rest = signature dates)
+    '[________], 20[__]#1': '{effective_date}',
+    // Leave remaining date placeholders for manual fill
+  }
+);
+```
+
+## Best Practices
+
+### Always Derive Keys from Actual Text
+
+Do NOT guess placeholder labels. Use the `scan` command or extract text from the DOCX:
+
+```bash
+open-agreements scan source.docx --output-replacements draft.json
+```
+
+Common mistakes:
+- Case differences: `[Company Name]` ≠ `[Company name]`
+- Whitespace: `[Company Name]` ≠ `[Company  Name]`
+- Underscore counts: `[__________]` ≠ `[____________]`
+
+### Sort Keys Manually (Optional)
+
+While the patcher sorts by length automatically, you can organize `replacements.json` for readability:
+
+```json
+{
+  "_comment": "Context keys",
+  "Investor Name > [____________]": "{investor_name}",
+  
+  "_comment": "Nth keys",
+  "[____________]#1": "{company_name}",
+  
+  "_comment": "Simple keys",
+  "[Company Name]": "{company_name}"
+}
+```
+
+(Note: JSON doesn't officially support `_comment` keys, but they're ignored by the patcher.)
+
+### Include Context for Formatting Preservation
+
+When possible, include surrounding text in both key and value:
+
+```json
+{
+  "among [____________], a Delaware": "among {company_name}, a Delaware"
+}
+```
+
+This preserves formatting on context text.
+
+### Currency and Percent Fields
+
+When source has `$[amount]`, the patched version becomes `${field_name}`. The template engine's `sanitizeCurrencyValues()` utility strips leading `$` from user values to prevent `$$1,000,000`.
+
+Same for percent signs: `[percent]%` → `{percent}%`.
+
+## Related Functions
+
+- [cleanDocument()](/api/recipes/clean-document) - Stage 1: Clean documents
+- [runRecipe()](/api/recipes/run-recipe) - Execute full pipeline
+- [fillTemplate()](/api/fill-template) - Stage 3: Fill template tags
+
+## See Also
+
+- [Recipe Engine Overview](/api/recipes/overview) - Understand the recipe system
+- [Adding Recipes Guide](https://github.com/openagreements/openagreements/blob/main/docs/adding-recipes.md) - Create replacements.json

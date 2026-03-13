@@ -1,122 +1,115 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "OpenAgreements",
+  "theme": "linden",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#ababab",
+    "light": "#3b3b3b",
+    "dark": "#dfdfdf"
   },
-  "favicon": "/favicon.svg",
+  "favicon": "https://media.brand.dev/18fc90e9-ea1b-480c-9e71-1153b40e9b6a.png",
+  "logo": {
+    "light": "https://media.brand.dev/18fc90e9-ea1b-480c-9e71-1153b40e9b6a.png",
+    "dark": "https://media.brand.dev/18fc90e9-ea1b-480c-9e71-1153b40e9b6a.png"
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/open-agreements/open-agreements"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/open-agreements/open-agreements"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Get Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "installation"
             ]
           },
           {
-            "group": "Customization",
+            "group": "CLI Reference",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "cli/overview",
+              "cli/fill",
+              "cli/list",
+              "cli/validate",
+              "cli/recipe",
+              "cli/scan",
+              "cli/checklist"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Templates",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "templates/overview",
+              "templates/catalog",
+              "templates/adding-templates",
+              "templates/recipes"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Integrations",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "integrations/overview",
+              "integrations/claude-code",
+              "integrations/gemini",
+              "integrations/mcp-servers",
+              "integrations/workspace-management"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/compliance-skills",
+              "advanced/architecture",
+              "advanced/contributing",
+              "advanced/trust-checklist"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "Core API",
             "pages": [
-              "api-reference/introduction"
+              "api/overview",
+              "api/fill-template",
+              "api/template-metadata",
+              "api/validation"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Recipe Engine",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "api/recipes/overview",
+              "api/recipes/run-recipe",
+              "api/recipes/clean-document",
+              "api/recipes/patch-document"
+            ]
+          },
+          {
+            "group": "Checklist API",
+            "pages": [
+              "api/checklist/overview",
+              "api/checklist/build-context",
+              "api/checklist/patch-operations",
+              "api/checklist/import-export"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

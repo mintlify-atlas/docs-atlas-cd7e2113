@@ -1,0 +1,615 @@
+---
+title: Adding Templates
+description: How to contribute a new CC BY or CC0 template to OpenAgreements
+---
+
+Learn how to add a new legal agreement template to the OpenAgreements repository.
+
+## Requirements
+
+Before adding a template, ensure it meets these criteria:
+
+<Check>
+- Template source must be **CC BY 4.0** or **CC0 1.0** licensed
+- The source document must be available as DOCX format
+- You must include proper attribution per the license terms
+- Source terms must not conflict with automation or redistribution policy
+</Check>
+
+<Warning>
+For non-redistributable sources (like NVCA), use the [Recipe system](/templates/recipes) instead. Do not add them to `content/templates/`.
+</Warning>
+
+## Step-by-Step Guide
+
+### Step 1: Create the Template Directory
+
+Create a new directory under `content/templates/` using kebab-case:
+
+```bash
+mkdir content/templates/<template-name>
+```
+
+**Naming conventions:**
+- Use lowercase with hyphens: `common-paper-mutual-nda`
+- Include source prefix: `common-paper-*`, `bonterms-*`, `openagreements-*`
+- Be descriptive but concise
+
+**Examples:**
+- `common-paper-mutual-nda`
+- `bonterms-professional-services-agreement`
+- `openagreements-employment-offer-letter`
+
+### Step 2: Create the DOCX Template
+
+Convert the source document to use `{field_name}` placeholders:
+
+1. **Download the source:** Get the original DOCX from the publisher
+2. **Preserve formatting:** Keep all fonts, styles, tables, and layouts exactly as in the source
+3. **Replace fillable content** with placeholders:
+   - Use single curly braces: `{party_name}`, `{effective_date}`
+   - Use `snake_case` for field names: `{company_name}`, `{purchase_amount}`
+   - Be consistent: same placeholder always means the same value
+
+**Example conversions:**
+
+| Original Text | Placeholder |
+|--------------|-------------|
+| `[Company Name]` | `{company_name}` |
+| `[Insert Date]` | `{effective_date}` |
+| `[Party 1 Legal Name]` | `{party_1_name}` |
+| `$[Amount]` | `${purchase_amount}` |
+
+<Tip>
+For currency fields like `$[Amount]`, place the dollar sign **outside** the placeholder: `${amount}`. OpenAgreements automatically handles currency sanitization to prevent double dollar signs.
+</Tip>
+
+**Save as:** `template.docx` in the template directory
+
+### Step 3: Create metadata.yaml
+
+Define the template's metadata, fields, and licensing:
+
+```yaml
+name: Template Display Name
+description: >
+  Brief description of the template, its purpose, and what it covers.
+  Can span multiple lines for readability.
+source_url: https://source.com/template-page
+version: '1.0'
+license: CC-BY-4.0
+allow_derivatives: true
+attribution_text: >
+  Based on [Template Name], available at [URL].
+  Licensed under CC BY 4.0. Copyright [Author/Organization].
+fields:
+  - name: company_name
+    type: string
+    description: Full legal name of the company
+    section: Parties
+  
+  - name: effective_date
+    type: date
+    description: Date the agreement takes effect
+    section: Terms
+  
+  - name: governing_law
+    type: string
+    description: State whose laws govern the agreement
+    default: Delaware
+    section: Legal
+  
+  - name: auto_renew
+    type: boolean
+    description: Whether the agreement automatically renews
+    default: 'true'
+    section: Terms
+  
+  - name: party_type
+    type: enum
+    description: Whether the party is an entity or individual
+    options:
+      - entity
+      - individual
+    default: entity
+    section: Signature Block
+
+required_fields:
+  - company_name
+  - effective_date
+```
+
+### Field Definition Reference
+
+#### Field Types
+
+| Type | Description | Example Values |
+|------|-------------|----------------|
+| `string` | Free-form text | Company name, address, description |
+| `date` | Date value (any format) | `2026-03-15`, `March 15, 2026` |
+| `number` | Numeric value | `100000`, `5.5` |
+| `boolean` | True/false value | `true`, `false` |
+| `enum` | One of a fixed set of options | `entity`, `individual` |
+| `array` | List of values | `["Item 1", "Item 2"]` |
+
+#### Required vs Optional Fields
+
+**Required fields:**
+- Must be listed in the `required_fields` array
+- If not provided during fill, renders as `_______` (underscores)
+- Use for critical fields that must always be filled
+
+**Optional fields with defaults:**
+- Include a `default` value in the field definition
+- If not provided, the default is used
+- Use for fields with common/sensible defaults
+
+**Optional empty fields:**
+- Set `default: ""` (explicit empty string)
+- If not provided, field becomes invisible in output
+- Use for truly optional content that shouldn't show blanks
+
+**Example:**
+
+```yaml
+fields:
+  # Required — shows _______ if missing
+  - name: company_name
+    type: string
+    description: Full legal name
+    section: Parties
+  
+  # Optional with default
+  - name: governing_law
+    type: string
+    description: Governing law state
+    default: Delaware
+    section: Legal
+  
+  # Optional empty — invisible if not provided
+  - name: amended_restated
+    type: string
+    description: "Amended and Restated" or empty
+    default: ""
+    section: Title
+
+required_fields:
+  - company_name
+```
+
+#### Enum Fields
+
+For fields with a fixed set of allowed values:
+
+```yaml
+- name: dispute_resolution
+  type: enum
+  description: Method for resolving disputes
+  options:
+    - arbitration
+    - courts
+  default: courts
+  section: Legal
+```
+
+#### Field Sections
+
+Organize fields into logical sections for better UX when AI agents interview users:
+
+- `Parties` — Company names, party information
+- `Terms` — Dates, term lengths, renewal settings
+- `Payment` — Fees, payment terms, billing
+- `Service` — Service description, SLAs, support
+- `Legal` — Governing law, jurisdiction, warranties
+- `Liability` — Caps, indemnity, insurance
+- `Privacy` — DPA, security, data handling
+- `Signature Block` — Signatory names, titles, emails
+
+### Step 4: Create README.md
+
+Document the template for users:
+
+```markdown
+# Template Name
+
+**Source:** [Publisher Name](https://source-url.com)  
+**License:** CC BY 4.0  
+**Version:** 1.0
+
+## Overview
+
+Brief description of what this template is for and when to use it.
+
+## Key Features
+
+- Feature 1
+- Feature 2
+- Feature 3
+
+## Required Fields
+
+- `company_name`: Full legal name of the company
+- `effective_date`: Date the agreement takes effect
+- `party_1_name`: Name of the first party
+
+## Optional Fields
+
+- `governing_law`: State law (defaults to Delaware)
+- `jurisdiction`: Courts with jurisdiction (defaults to Delaware courts)
+
+## Usage
+
+```bash
+open-agreements fill template-name -d values.json -o output.docx
+```
+
+## Example Values
+
+See `examples/template-name.json` for sample field values.
+
+## Attribution
+
+Based on [Template Name], available at [URL]. Licensed under CC BY 4.0. Copyright [Author].
+```
+
+### Step 5: Validate the Template
+
+Run the validation pipeline to ensure everything is correct:
+
+```bash
+# Validate the specific template
+open-agreements validate <template-name>
+
+# Run full validation suite
+open-agreements validate
+```
+
+**What validation checks:**
+
+<AccordionGroup>
+  <Accordion title="Metadata Schema Compliance" icon="check">
+    - All required metadata fields present
+    - Field types are valid (string, date, number, boolean, enum, array)
+    - Enum fields have `options` array
+    - Default values match field types
+    - No duplicate field names
+  </Accordion>
+  
+  <Accordion title="Placeholder-Field Alignment" icon="link">
+    - Every `{placeholder}` in the DOCX has a corresponding field definition
+    - No orphaned placeholders without field definitions
+    - Field names match placeholder names exactly
+  </Accordion>
+  
+  <Accordion title="Required Fields Validation" icon="exclamation">
+    - All fields listed in `required_fields` are defined in `fields`
+    - No duplicate entries in `required_fields`
+    - Required fields are appropriate for the template
+  </Accordion>
+  
+  <Accordion title="License Compliance" icon="scale-balanced">
+    - License is one of: `CC-BY-4.0`, `CC0-1.0`
+    - Attribution text is present and non-empty
+    - `allow_derivatives` matches license terms
+    - Source URL is valid
+  </Accordion>
+  
+  <Accordion title="DOCX Integrity" icon="file">
+    - Document can be opened and parsed
+    - No corruption in the DOCX structure
+    - Placeholders are properly formatted
+  </Accordion>
+</AccordionGroup>
+
+### Step 6: Test Filling
+
+Test that the template fills correctly with sample data:
+
+```bash
+# Create sample data
+cat > test-values.json << EOF
+{
+  "company_name": "Acme Corporation",
+  "effective_date": "March 15, 2026",
+  "party_1_name": "Acme Corp",
+  "party_2_name": "Beta Inc",
+  "governing_law": "California"
+}
+EOF
+
+# Fill the template
+open-agreements fill <template-name> -d test-values.json -o test-output.docx
+
+# Open and review the output
+open test-output.docx
+```
+
+**Review checklist:**
+- [ ] All placeholders are replaced with values
+- [ ] No `{tags}` or `_______` remain (unless fields were intentionally not provided)
+- [ ] Formatting is preserved (fonts, spacing, tables, headers/footers)
+- [ ] Default values appear where expected
+- [ ] Optional empty fields are truly invisible
+- [ ] Document opens without errors in Word/LibreOffice
+
+### Step 7: Submit a Pull Request
+
+Once validation passes and testing is complete:
+
+1. **Commit your changes:**
+   ```bash
+   git add content/templates/<template-name>/
+   git commit -m "Add <template-name> template"
+   ```
+
+2. **Push to your fork:**
+   ```bash
+   git push origin add-template-name
+   ```
+
+3. **Open a Pull Request** with:
+   - Template name and source
+   - Description of what the template covers
+   - Validation and test results
+   - Confirmation of license compatibility
+
+## Source Terms Gate
+
+Before adding any template, classify the source terms:
+
+### Permissive
+
+✅ **Safe to add as internal template**
+
+- CC BY 4.0
+- CC0 1.0
+- MIT
+- Apache 2.0
+- Explicitly allows automation and redistribution
+
+**Examples:** Common Paper, Bonterms
+
+### Pointer-Only (External)
+
+⚠️ **Use external template or recipe**
+
+- CC BY-ND 4.0 (No Derivatives)
+- Allows use but restricts modification
+- Can vendor unchanged in package
+
+**Examples:** Y Combinator SAFEs (use `content/external/`)
+
+### Restricted / No Automation
+
+🛑 **Do not add without explicit permission**
+
+- Freely downloadable but not redistributable
+- Terms prohibit automation or commercial use
+- No clear license statement
+
+**Examples:** NVCA documents (use [Recipe system](/templates/recipes) instead)
+
+<Warning>
+Employment document sources have additional classifications tracked in `docs/employment-source-policy.md`. Review that file before adding employment templates.
+</Warning>
+
+## Advanced: Computed Fields
+
+Some templates include computed fields that derive values from other fields:
+
+```yaml
+fields:
+  - name: order_date_is_last_signature
+    type: boolean
+    description: If true, order date is date of last signature
+    default: 'true'
+  
+  - name: custom_order_date
+    type: string
+    description: Custom order date (only if order_date_is_last_signature is false)
+  
+  - name: order_date_display
+    type: string
+    description: '[Computed] Order date text derived from the above fields'
+```
+
+In the DOCX, use `{order_date_display}`. In your fill logic or data file, compute the display value:
+
+```javascript
+if (data.order_date_is_last_signature) {
+  data.order_date_display = "the date of last signature below";
+} else {
+  data.order_date_display = data.custom_order_date;
+}
+```
+
+This keeps templates clean and flexible while providing good UX.
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Placeholder Naming" icon="tag">
+    - Use `snake_case`: `company_name`, not `companyName` or `CompanyName`
+    - Be specific: `provider_email` vs `customer_email`, not just `email`
+    - Match field names exactly: `{party_1_name}` in DOCX → `party_1_name` in metadata
+    - Group related fields with prefixes: `party_1_name`, `party_1_email`, `party_1_title`
+  </Accordion>
+  
+  <Accordion title="Field Descriptions" icon="info">
+    - Write from the user's perspective: "Full legal name of the company" not "Company name field"
+    - Explain constraints or formats: "Date in YYYY-MM-DD format" or "Dollar amount without currency symbol"
+    - Clarify relationships: "Must match party_1_name for signature" or "Only used when auto_renew is false"
+  </Accordion>
+  
+  <Accordion title="Default Values" icon="circle-check">
+    - Use sensible defaults for jurisdiction: `Delaware` for US companies
+    - Default booleans to the most common choice: `auto_renew: true` if that's typical
+    - Leave critical business terms without defaults: purchase amounts, dates, party names
+    - Use empty string `""` for truly optional prose: "Additional terms or None"
+  </Accordion>
+  
+  <Accordion title="Preserving Formatting" icon="paint-brush">
+    - Never change fonts, sizes, or colors from the source
+    - Keep all tables, borders, and shading exactly as published
+    - Preserve headers, footers, and page numbers
+    - Maintain section breaks and page layout
+    - Test output in both Microsoft Word and LibreOffice
+  </Accordion>
+  
+  <Accordion title="Testing" icon="vial">
+    - Test with minimal required fields only
+    - Test with all fields provided
+    - Test with mixed required + optional fields
+    - Test edge cases: very long text, special characters, dates in different formats
+    - Test that unfilled optional fields are truly invisible (not `_______`)
+  </Accordion>
+</AccordionGroup>
+
+## Example: Adding a Common Paper Template
+
+Here's a complete example adding a fictional Common Paper Data Retention Addendum:
+
+### 1. Create directory
+
+```bash
+mkdir content/templates/common-paper-data-retention-addendum
+cd content/templates/common-paper-data-retention-addendum
+```
+
+### 2. Convert DOCX
+
+Download from Common Paper, replace:
+- `[Provider Name]` → `{provider_name}`
+- `[Customer Name]` → `{customer_name}`
+- `[Retention Period]` → `{retention_period}`
+- `[Effective Date]` → `{effective_date}`
+
+Save as `template.docx`
+
+### 3. Create metadata.yaml
+
+```yaml
+name: Common Paper Data Retention Addendum
+description: >
+  Addendum to cloud service agreements specifying data retention periods,
+  deletion obligations, and data return procedures.
+source_url: https://commonpaper.com/standards/data-retention-addendum/1.0
+version: '1.0'
+license: CC-BY-4.0
+allow_derivatives: true
+attribution_text: >
+  Based on the Common Paper Data Retention Addendum, available at
+  https://commonpaper.com. Licensed under CC BY 4.0. Copyright Common Paper, Inc.
+fields:
+  - name: provider_name
+    type: string
+    description: Name of the service provider
+    section: Parties
+  
+  - name: customer_name
+    type: string
+    description: Name of the customer
+    section: Parties
+  
+  - name: effective_date
+    type: date
+    description: Date the addendum takes effect
+    section: Terms
+  
+  - name: retention_period
+    type: string
+    description: How long data is retained after termination (e.g. "30 days", "90 days")
+    default: 30 days
+    section: Terms
+  
+  - name: return_format
+    type: enum
+    description: Format for returning customer data
+    options:
+      - CSV
+      - JSON
+      - Original Format
+    default: Original Format
+    section: Terms
+
+required_fields:
+  - provider_name
+  - customer_name
+  - effective_date
+  - retention_period
+```
+
+### 4. Create README.md
+
+```markdown
+# Common Paper Data Retention Addendum
+
+**Source:** [Common Paper](https://commonpaper.com/standards/data-retention-addendum/1.0)  
+**License:** CC BY 4.0  
+**Version:** 1.0
+
+## Overview
+
+Addendum for cloud service agreements that specifies data retention periods,
+deletion timelines, and data return procedures upon termination.
+
+## Usage
+
+```bash
+open-agreements fill common-paper-data-retention-addendum \
+  --set provider_name="CloudCorp" \
+  --set customer_name="Acme Inc" \
+  --set effective_date="2026-03-15" \
+  --set retention_period="90 days"
+```
+
+## Attribution
+
+Based on the Common Paper Data Retention Addendum, available at
+https://commonpaper.com. Licensed under CC BY 4.0. Copyright Common Paper, Inc.
+```
+
+### 5. Validate and test
+
+```bash
+# Validate
+open-agreements validate common-paper-data-retention-addendum
+
+# Test fill
+open-agreements fill common-paper-data-retention-addendum \
+  --set provider_name="Test Provider" \
+  --set customer_name="Test Customer" \
+  --set effective_date="2026-03-15" \
+  -o test.docx
+
+# Review output
+open test.docx
+```
+
+### 6. Submit PR
+
+```bash
+git add content/templates/common-paper-data-retention-addendum/
+git commit -m "Add Common Paper Data Retention Addendum template"
+git push origin add-data-retention-addendum
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Template Catalog" icon="grid" href="/templates/catalog">
+    Browse existing templates for examples
+  </Card>
+  
+  <Card title="Recipe System" icon="wand-magic-sparkles" href="/templates/recipes">
+    Learn about recipes for non-redistributable sources
+  </Card>
+  
+  <Card title="Validation Reference" icon="check" href="/cli/validate">
+    Understand what validation checks
+  </Card>
+  
+  <Card title="Contributing Guide" icon="code-pull-request" href="/advanced/contributing">
+    General contribution guidelines
+  </Card>
+</CardGroup>

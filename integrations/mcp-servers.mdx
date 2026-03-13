@@ -1,0 +1,564 @@
+---
+title: MCP Server Setup
+description: Configure local stdio MCP servers for contract template drafting and workspace management
+---
+
+OpenAgreements provides two local stdio MCP servers for contract operations:
+
+1. **contract-templates-mcp** — Template discovery and DOCX generation
+2. **contracts-workspace-mcp** — Workspace organization and status tracking
+
+Both servers run locally and require no hosted endpoints or OAuth configuration.
+
+## Installation
+
+MCP servers are distributed as npm packages:
+
+<CodeGroup>
+```bash contract-templates-mcp
+npx -y @open-agreements/contract-templates-mcp
+```
+
+```bash contracts-workspace-mcp
+npx -y @open-agreements/contracts-workspace-mcp
+```
+</CodeGroup>
+
+<Note>
+  Using `npx -y` automatically installs and runs the latest version. For fixed versions, install globally or pin in package.json.
+</Note>
+
+## Configuration
+
+<Tabs>
+  <Tab title="Claude Desktop">
+    Add to your MCP configuration file:
+
+    <CodeGroup>
+    ```json macOS/Linux (~/.config/claude/mcp.json)
+    {
+      "mcpServers": {
+        "contract-templates-mcp": {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["-y", "@open-agreements/contract-templates-mcp"]
+        },
+        "contracts-workspace-mcp": {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["-y", "@open-agreements/contracts-workspace-mcp"]
+        }
+      }
+    }
+    ```
+
+    ```json Windows (%APPDATA%\\Claude\\mcp.json)
+    {
+      "mcpServers": {
+        "contract-templates-mcp": {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["-y", "@open-agreements/contract-templates-mcp"]
+        },
+        "contracts-workspace-mcp": {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["-y", "@open-agreements/contracts-workspace-mcp"]
+        }
+      }
+    }
+    ```
+    </CodeGroup>
+  </Tab>
+  <Tab title="Claude Code CLI">
+    Add MCP servers using the `claude mcp add` command:
+
+    ```bash
+    # Using npx (auto-install latest)
+    claude mcp add --transport stdio contract-templates-mcp -- npx -y @open-agreements/contract-templates-mcp
+
+    # Using absolute path (monorepo dev)
+    claude mcp add --transport stdio contracts-workspace-mcp -- node /absolute/path/to/open-agreements/packages/contracts-workspace-mcp/bin/open-agreements-workspace-mcp.js
+    ```
+  </Tab>
+  <Tab title="Gemini CLI">
+    The Gemini extension includes both MCP servers automatically:
+
+    ```bash
+    gemini extensions install https://github.com/open-agreements/open-agreements
+    ```
+
+    No additional configuration needed.
+  </Tab>
+  <Tab title="Generic MCP Client">
+    For any MCP-compatible client:
+
+    ```json
+    {
+      "mcpServers": {
+        "contract-templates-mcp": {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["-y", "@open-agreements/contract-templates-mcp"]
+        },
+        "contracts-workspace-mcp": {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["-y", "@open-agreements/contracts-workspace-mcp"]
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## contract-templates-mcp
+
+Local template discovery and DOCX generation.
+
+**Package:** `@open-agreements/contract-templates-mcp`  
+**Binary:** `open-agreements-contract-templates-mcp`
+
+### Tools
+
+#### list_templates
+
+List available templates with compact or full metadata.
+
+<ParamField path="mode" type="enum" default="full">
+  Response detail mode: `compact` or `full`
+</ParamField>
+
+**Example Request:**
+
+```json
+{
+  "mode": "full"
+}
+```
+
+**Example Response (compact mode):**
+
+```json
+{
+  "ok": true,
+  "tool": "list_templates",
+  "schema_version": "2026-02-26",
+  "data": {
+    "mode": "compact",
+    "templates": [
+      {
+        "template_id": "common-paper-mutual-nda",
+        "name": "common-paper-mutual-nda",
+        "field_count": 5
+      }
+    ]
+  }
+}
+```
+
+**Example Response (full mode):**
+
+```json
+{
+  "ok": true,
+  "tool": "list_templates",
+  "schema_version": "2026-02-26",
+  "data": {
+    "mode": "full",
+    "templates": [
+      {
+        "template_id": "common-paper-mutual-nda",
+        "name": "common-paper-mutual-nda",
+        "category": "nda",
+        "description": "Mutual Non-Disclosure Agreement",
+        "license": "CC-BY-4.0",
+        "source_url": "https://commonpaper.com/standards/mutual-nda/",
+        "source": "Common Paper",
+        "attribution_text": "This document is licensed under CC BY 4.0 by Common Paper.",
+        "fields": [
+          {
+            "name": "party_1_name",
+            "type": "string",
+            "required": true,
+            "section": "Parties",
+            "description": "Legal name of first party",
+            "default": null
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### get_template
+
+Fetch a single template definition with field metadata.
+
+<ParamField path="template_id" type="string" required>
+  Template ID, e.g., `"common-paper-mutual-nda"`
+</ParamField>
+
+**Example Request:**
+
+```json
+{
+  "template_id": "common-paper-mutual-nda"
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "ok": true,
+  "tool": "get_template",
+  "schema_version": "2026-02-26",
+  "data": {
+    "template": {
+      "template_id": "common-paper-mutual-nda",
+      "name": "common-paper-mutual-nda",
+      "category": "nda",
+      "description": "Mutual Non-Disclosure Agreement",
+      "license": "CC-BY-4.0",
+      "source_url": "https://commonpaper.com/standards/mutual-nda/",
+      "source": "Common Paper",
+      "fields": [
+        {
+          "name": "party_1_name",
+          "type": "string",
+          "required": true,
+          "section": "Parties",
+          "description": "Legal name of first party",
+          "default": null
+        },
+        {
+          "name": "party_2_name",
+          "type": "string",
+          "required": true,
+          "section": "Parties",
+          "description": "Legal name of second party",
+          "default": null
+        },
+        {
+          "name": "effective_date",
+          "type": "string",
+          "required": true,
+          "section": "Dates",
+          "description": "Agreement effective date",
+          "default": null
+        },
+        {
+          "name": "purpose",
+          "type": "string",
+          "required": true,
+          "section": "Purpose",
+          "description": "Purpose of confidential disclosure",
+          "default": null
+        },
+        {
+          "name": "governing_law",
+          "type": "string",
+          "required": false,
+          "section": "Governing Law",
+          "description": "Governing law jurisdiction",
+          "default": "Delaware"
+        }
+      ]
+    }
+  }
+}
+```
+
+#### fill_template
+
+Fill a template using local OpenAgreements CLI and return local path or inline base64.
+
+<ParamField path="template" type="string" required>
+  Template ID, e.g., `"common-paper-mutual-nda"`
+</ParamField>
+
+<ParamField path="values" type="object" default="{}">
+  Template field values passed to the fill command
+</ParamField>
+
+<ParamField path="output_path" type="string">
+  Optional output DOCX path. Defaults to a temporary location.
+</ParamField>
+
+<ParamField path="return_mode" type="enum" default="local_path">
+  Return `local_path` or `inline_base64` document data
+</ParamField>
+
+**Example Request:**
+
+```json
+{
+  "template": "common-paper-mutual-nda",
+  "values": {
+    "party_1_name": "Acme Corp",
+    "party_2_name": "Beta Inc",
+    "effective_date": "February 1, 2026",
+    "purpose": "Evaluating a potential business partnership",
+    "governing_law": "Delaware"
+  },
+  "output_path": "/tmp/acme-beta-nda.docx",
+  "return_mode": "local_path"
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "ok": true,
+  "tool": "fill_template",
+  "schema_version": "2026-02-26",
+  "data": {
+    "template": "common-paper-mutual-nda",
+    "output_path": "/tmp/acme-beta-nda.docx",
+    "content_type": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "return_mode": "local_path"
+  }
+}
+```
+
+## contracts-workspace-mcp
+
+Local workspace organization and status tracking.
+
+**Package:** `@open-agreements/contracts-workspace-mcp`  
+**Binary:** `open-agreements-workspace-mcp`
+
+### Tools
+
+#### workspace_init
+
+Preview topic-first workspace setup and return missing folders/files without creating them.
+
+<ParamField path="root_dir" type="string">
+  Root directory to initialize. Defaults to current working directory.
+</ParamField>
+
+<ParamField path="agents" type="array">
+  Optional AI agent snippets to suggest: `["claude", "gemini"]`
+</ParamField>
+
+<ParamField path="topics" type="array">
+  Optional list of top-level topic folders to suggest
+</ParamField>
+
+**Example Request:**
+
+```json
+{
+  "root_dir": "/Users/you/contracts",
+  "agents": ["claude", "gemini"],
+  "topics": ["employment", "vendor", "customer"]
+}
+```
+
+**Example Response:**
+
+```json
+{
+  "root_dir": "/Users/you/contracts",
+  "mode": "suggest-only",
+  "suggested_directories": ["employment/draft", "employment/executed", "vendor/draft", "vendor/executed"],
+  "existing_directories": [],
+  "missing_directories": ["employment/draft", "employment/executed"],
+  "suggested_files": ["CONTRACTS.md", "forms-catalog.yaml", "WORKSPACE.md"],
+  "existing_files": [],
+  "missing_files": ["CONTRACTS.md", "forms-catalog.yaml"],
+  "agent_instructions": {
+    "claude": "Add .claude-workspace/ snippet",
+    "gemini": "Add .gemini-workspace/ snippet"
+  },
+  "suggested_commands": [
+    "mkdir -p employment/draft employment/executed",
+    "touch CONTRACTS.md forms-catalog.yaml"
+  ],
+  "lint": {
+    "findings": [],
+    "error_count": 0,
+    "warning_count": 0
+  }
+}
+```
+
+#### catalog_validate
+
+Validate forms-catalog.yaml schema and entry integrity fields.
+
+<ParamField path="root_dir" type="string">
+  Workspace root. Defaults to current working directory.
+</ParamField>
+
+<ParamField path="catalog_path" type="string">
+  Optional custom catalog path
+</ParamField>
+
+**Example Response:**
+
+```json
+{
+  "root_dir": "/Users/you/contracts",
+  "catalog_path": "/Users/you/contracts/forms-catalog.yaml",
+  "valid": true,
+  "entries": 12
+}
+```
+
+#### catalog_fetch
+
+Download redistributable catalog entries and verify SHA-256 checksums.
+
+<ParamField path="root_dir" type="string">
+  Workspace root. Defaults to current working directory.
+</ParamField>
+
+<ParamField path="catalog_path" type="string">
+  Optional custom catalog path
+</ParamField>
+
+<ParamField path="ids" type="array">
+  Optional catalog entry IDs to fetch. Omit to fetch all entries.
+</ParamField>
+
+**Example Response:**
+
+```json
+{
+  "root_dir": "/Users/you/contracts",
+  "catalog_path": "/Users/you/contracts/forms-catalog.yaml",
+  "downloaded_count": 3,
+  "pointer_only_count": 1,
+  "failed_count": 0,
+  "results": [
+    {
+      "id": "yc-safe-valuation-cap",
+      "status": "downloaded",
+      "path": "/Users/you/contracts/forms/yc-safe-valuation-cap.docx"
+    }
+  ]
+}
+```
+
+#### status_generate
+
+Generate contracts-index.yaml and return lint/index summary.
+
+<ParamField path="root_dir" type="string">
+  Workspace root. Defaults to current working directory.
+</ParamField>
+
+<ParamField path="output_path" type="string" default="contracts-index.yaml">
+  Relative output path. Absolute paths are rejected.
+</ParamField>
+
+**Example Response:**
+
+```json
+{
+  "root_dir": "/Users/you/contracts",
+  "index_path": "/Users/you/contracts/contracts-index.yaml",
+  "summary": {
+    "generated_at": "2026-02-15T10:30:00Z",
+    "total_documents": 42,
+    "draft_count": 12,
+    "executed_count": 30
+  },
+  "lint": {
+    "findings": [],
+    "error_count": 0,
+    "warning_count": 0
+  }
+}
+```
+
+#### status_lint
+
+Lint workspace structure and naming/index freshness rules.
+
+<ParamField path="root_dir" type="string">
+  Workspace root. Defaults to current working directory.
+</ParamField>
+
+**Example Response:**
+
+```json
+{
+  "root_dir": "/Users/you/contracts",
+  "findings": [
+    {
+      "level": "warning",
+      "rule": "stale-index",
+      "message": "contracts-index.yaml is outdated. Run 'status generate' to refresh."
+    }
+  ],
+  "error_count": 0,
+  "warning_count": 1
+}
+```
+
+## Building from Source
+
+For monorepo development:
+
+<Tabs>
+  <Tab title="contract-templates-mcp">
+    ```bash
+    npm run build:contract-templates-mcp
+    node packages/contract-templates-mcp/bin/open-agreements-contract-templates-mcp.js
+    ```
+  </Tab>
+  <Tab title="contracts-workspace-mcp">
+    ```bash
+    npm run build:workspace-mcp
+    node packages/contracts-workspace-mcp/bin/open-agreements-workspace-mcp.js
+    ```
+  </Tab>
+</Tabs>
+
+## Trust Boundary
+
+<Check>
+  Both MCP servers run locally via stdio and operate on local filesystem paths. No hosted endpoints required.
+</Check>
+
+### Local Execution Benefits
+
+- No network calls during template filling
+- Full control over data flow
+- DOCX generation happens on your machine
+- Works with locally synced cloud folders (e.g., Google Drive)
+
+### Data Flow
+
+1. MCP client sends tool request via stdio
+2. MCP server processes request locally
+3. For `fill_template`: DOCX generated on local filesystem
+4. For workspace tools: operates on local directory structure
+5. Response returned via stdio
+
+<Warning>
+  MCP servers have filesystem access within the directories you specify. Use absolute paths for `root_dir` parameters to avoid ambiguity.
+</Warning>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Workspace Management" icon="folder" href="/integrations/workspace-management">
+    Learn about workspace structure and conventions
+  </Card>
+  <Card title="Claude Code" icon="code" href="/integrations/claude-code">
+    Use with Claude Code
+  </Card>
+  <Card title="Gemini" icon="sparkles" href="/integrations/gemini">
+    Use with Gemini CLI
+  </Card>
+  <Card title="Templates" icon="file-contract" href="/templates">
+    Browse available templates
+  </Card>
+</CardGroup>

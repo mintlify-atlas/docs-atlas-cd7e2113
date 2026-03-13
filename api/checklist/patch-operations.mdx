@@ -1,0 +1,543 @@
+---
+title: 'Checklist Patch Operations'
+description: 'Validate and apply JSON Patch operations to closing checklists with revision tracking'
+---
+
+## Overview
+
+The OpenAgreements checklist system uses RFC 6902 JSON Patch operations for safe, auditable updates with revision conflict detection. The patch system provides:
+
+- **Two-phase apply**: Validate first, then apply with proof of validation
+- **Revision tracking**: Prevent concurrent update conflicts
+- **Dry-run simulation**: Validate patches produce valid schemas
+- **Idempotent replay**: Safe re-application of already-applied patches
+- **Proposed mode**: Stage patches without applying them
+
+## Core Functions
+
+### validateChecklistPatch()
+
+**Location**: `src/core/checklist/patch-validator.ts:486`
+
+Validates a patch envelope against a checklist and returns a validation artifact.
+
+```typescript
+async function validateChecklistPatch(
+  input: ValidateChecklistPatchInput
+): Promise<ChecklistPatchValidationResult>
+```
+
+<ParamField path="input" type="ValidateChecklistPatchInput" required>
+  Validation input parameters
+</ParamField>
+
+#### ValidateChecklistPatchInput
+
+```typescript
+interface ValidateChecklistPatchInput {
+  checklist_id: string;
+  checklist: unknown;
+  current_revision: number;
+  patch: unknown;
+  now_ms?: number;
+  validation_ttl_ms?: number;
+  store?: ChecklistPatchValidationStore;
+}
+```
+
+<ParamField path="checklist_id" type="string" required>
+  Unique identifier for the checklist being patched
+</ParamField>
+
+<ParamField path="checklist" type="unknown" required>
+  Current checklist state (validated against `ClosingChecklistSchema`)
+</ParamField>
+
+<ParamField path="current_revision" type="number" required>
+  Current revision number of the checklist
+</ParamField>
+
+<ParamField path="patch" type="unknown" required>
+  Patch envelope to validate (validated against `ChecklistPatchEnvelopeSchema`)
+</ParamField>
+
+<ParamField path="now_ms" type="number">
+  Current time in milliseconds (defaults to `Date.now()`)
+</ParamField>
+
+<ParamField path="validation_ttl_ms" type="number">
+  Validation artifact TTL in milliseconds (default: 600000 = 10 minutes)
+</ParamField>
+
+<ParamField path="store" type="ChecklistPatchValidationStore">
+  Custom validation store (defaults to in-memory store)
+</ParamField>
+
+#### ChecklistPatchValidationSuccess
+
+```typescript
+interface ChecklistPatchValidationSuccess {
+  ok: true;
+  validation_id: string;
+  patch_hash: string;
+  patch: ChecklistPatchEnvelope;
+  resolved_operations: ResolvedChecklistPatchOperation[];
+  resulting_state_valid: true;
+  artifact_expires_at_ms: number;
+}
+```
+
+<ResponseField name="ok" type="true">
+  Indicates successful validation
+</ResponseField>
+
+<ResponseField name="validation_id" type="string">
+  Unique validation ID (format: `val_<uuid>`). Pass this to `applyChecklistPatch()`.
+</ResponseField>
+
+<ResponseField name="patch_hash" type="string">
+  SHA-256 hash of the patch operations
+</ResponseField>
+
+<ResponseField name="patch" type="ChecklistPatchEnvelope">
+  Validated patch envelope
+</ResponseField>
+
+<ResponseField name="resolved_operations" type="ResolvedChecklistPatchOperation[]">
+  Operations with resolved paths and metadata
+</ResponseField>
+
+<ResponseField name="artifact_expires_at_ms" type="number">
+  Expiration timestamp (validation artifacts expire after TTL)
+</ResponseField>
+
+#### ChecklistPatchValidationFailure
+
+```typescript
+interface ChecklistPatchValidationFailure {
+  ok: false;
+  diagnostics: ChecklistPatchValidationDiagnostic[];
+  patch?: ChecklistPatchEnvelope;
+  resolved_operations: ResolvedChecklistPatchOperation[];
+}
+```
+
+<ResponseField name="diagnostics" type="ChecklistPatchValidationDiagnostic[]">
+  Array of validation errors with codes, messages, and paths
+</ResponseField>
+
+### applyChecklistPatch()
+
+**Location**: `src/core/checklist/patch-apply.ts:191`
+
+Applies a validated patch to a checklist.
+
+```typescript
+async function applyChecklistPatch(
+  input: ApplyChecklistPatchInput
+): Promise<ChecklistPatchApplyResult>
+```
+
+<ParamField path="input" type="ApplyChecklistPatchInput" required>
+  Apply input parameters including validation ID
+</ParamField>
+
+#### ApplyChecklistPatchInput
+
+```typescript
+interface ApplyChecklistPatchInput {
+  checklist_id: string;
+  checklist: unknown;
+  current_revision: number;
+  request: unknown;  // ChecklistPatchApplyRequest
+  now_ms?: number;
+  validation_store?: ChecklistPatchValidationStore;
+  applied_patch_store?: ChecklistAppliedPatchStore;
+  proposed_patch_store?: ChecklistProposedPatchStore;
+}
+```
+
+<ParamField path="request" type="ChecklistPatchApplyRequest" required>
+  Apply request containing validation_id and patch envelope
+</ParamField>
+
+#### ChecklistPatchApplyRequest
+
+```typescript
+interface ChecklistPatchApplyRequest {
+  validation_id: string;
+  patch: ChecklistPatchEnvelope;
+}
+```
+
+<ParamField path="validation_id" type="string" required>
+  Validation ID from `validateChecklistPatch()`
+</ParamField>
+
+<ParamField path="patch" type="ChecklistPatchEnvelope" required>
+  The patch envelope (must match the validated patch hash)
+</ParamField>
+
+#### ChecklistPatchApplySuccess
+
+```typescript
+interface ChecklistPatchApplySuccess {
+  ok: true;
+  checklist: ClosingChecklist;
+  previous_revision: number;
+  new_revision: number;
+  patch_id: string;
+  patch_hash: string;
+  idempotent_replay: boolean;
+  mode: 'APPLY' | 'PROPOSED';
+  applied: boolean;
+  resolved_operations: ResolvedChecklistPatchOperation[];
+}
+```
+
+<ResponseField name="checklist" type="ClosingChecklist">
+  Updated checklist (or unchanged if mode is PROPOSED)
+</ResponseField>
+
+<ResponseField name="previous_revision" type="number">
+  Revision before this patch
+</ResponseField>
+
+<ResponseField name="new_revision" type="number">
+  New revision (incremented by 1 if mode is APPLY, unchanged if PROPOSED)
+</ResponseField>
+
+<ResponseField name="idempotent_replay" type="boolean">
+  True if this patch_id was already applied with the same hash
+</ResponseField>
+
+<ResponseField name="mode" type="'APPLY' | 'PROPOSED'">
+  Patch mode from the envelope
+</ResponseField>
+
+<ResponseField name="applied" type="boolean">
+  True if patch was actually applied (false for PROPOSED mode or idempotent replay)
+</ResponseField>
+
+## Patch Envelope Schema
+
+```typescript
+interface ChecklistPatchEnvelope {
+  patch_id: string;
+  expected_revision: number;
+  mode: 'APPLY' | 'PROPOSED';
+  source_event?: ChecklistPatchSourceEvent;
+  operations: ChecklistPatchOperation[];
+}
+```
+
+<ParamField path="patch_id" type="string" required>
+  Unique identifier for this patch (must be unique within a checklist)
+</ParamField>
+
+<ParamField path="expected_revision" type="number" required>
+  The revision this patch expects. If the current revision doesn't match, validation fails with `REVISION_CONFLICT`.
+</ParamField>
+
+<ParamField path="mode" type="enum" default="APPLY">
+  - `APPLY`: Apply the patch and increment revision
+  - `PROPOSED`: Stage the patch without applying (for review workflows)
+</ParamField>
+
+<ParamField path="source_event" type="ChecklistPatchSourceEvent">
+  Optional metadata about the source of the patch
+</ParamField>
+
+<ParamField path="operations" type="ChecklistPatchOperation[]" required>
+  Array of JSON Patch operations (at least one required)
+</ParamField>
+
+## Patch Operations
+
+```typescript
+interface ChecklistPatchOperation {
+  op: 'add' | 'replace' | 'remove';
+  path: string;  // JSON Pointer (RFC 6901)
+  value?: unknown;  // Required for add/replace
+  rationale?: string;
+  source?: string;
+}
+```
+
+<ParamField path="op" type="enum" required>
+  - `add`: Add a new value (can append to arrays with `/-`)
+  - `replace`: Replace an existing value
+  - `remove`: Remove an existing value
+</ParamField>
+
+<ParamField path="path" type="string" required>
+  JSON Pointer to the target (e.g., `/checklist_entries/E-1/status`)
+</ParamField>
+
+<ParamField path="value" type="unknown">
+  Value for add/replace operations
+</ParamField>
+
+<ParamField path="rationale" type="string">
+  Human-readable explanation of why this change is being made
+</ParamField>
+
+<ParamField path="source" type="string">
+  Source identifier (e.g., "DOCX import", "user edit")
+</ParamField>
+
+### JSON Pointer Format
+
+Paths use RFC 6901 JSON Pointer syntax:
+- Start with `/`
+- Segments separated by `/`
+- Escape `~` as `~0` and `/` as `~1`
+- Array indices are integers (0-based)
+- Use `/-` to append to arrays
+
+Examples:
+```
+/checklist_entries/E-1/status
+/documents/DOC-1/primary_link
+/action_items/A-1/assigned_to/individual_name
+/checklist_entries/E-1/citations/-
+/checklist_entries/E-1/citations/0
+```
+
+### Operation Rules
+
+<Warning>
+  - Root path operations (`/`) are not supported
+  - Dangerous keys (`__proto__`, `constructor`, `prototype`) are rejected
+  - `remove` and `replace` cannot target the append index `/-`
+  - Array indices must be in bounds
+  - Parent paths must exist and be containers (object or array)
+</Warning>
+
+### Citation Operations
+
+When adding/replacing citations, the value must match `PatchCitationSchema`:
+
+```typescript
+interface PatchCitation {
+  text: string;  // Required
+  link?: string;
+  filepath?: string;
+}
+```
+
+Example:
+```typescript
+{
+  op: 'add',
+  path: '/checklist_entries/E-1/citations/-',
+  value: {
+    text: 'Section 4.2',
+    link: 'https://docs.example.com/pa.pdf#page=12'
+  },
+  rationale: 'Added reference to purchase agreement'
+}
+```
+
+## Validation Error Codes
+
+| Code | Description |
+|------|-------------|
+| `CHECKLIST_SCHEMA_INVALID` | Input checklist failed schema validation |
+| `PATCH_SCHEMA_INVALID` | Patch envelope failed schema validation |
+| `REVISION_CONFLICT` | expected_revision doesn't match current_revision |
+| `TARGET_NOT_FOUND` | Path references non-existent key or array index |
+| `TARGET_PATH_INVALID` | Invalid JSON Pointer or dangerous key |
+| `TARGET_PARENT_INVALID` | Parent path is not a container |
+| `POST_PATCH_SCHEMA_INVALID` | Resulting checklist would violate schema |
+
+## Apply Error Codes
+
+| Code | Description |
+|------|-------------|
+| `APPLY_REQUEST_SCHEMA_INVALID` | Request payload invalid |
+| `VALIDATION_REQUIRED` | validation_id missing or expired |
+| `VALIDATION_MISMATCH` | Patch hash doesn't match validated hash |
+| `PATCH_ID_CONFLICT` | patch_id already exists with different hash |
+| `APPLY_OPERATION_FAILED` | Operation failed during apply |
+
+## Example Workflow
+
+### Basic Update Flow
+
+```typescript
+import {
+  validateChecklistPatch,
+  applyChecklistPatch,
+  type ClosingChecklist,
+  type ChecklistPatchEnvelope
+} from 'openagreements';
+
+const checklist: ClosingChecklist = { /* ... */ };
+const currentRevision = 5;
+
+const patch: ChecklistPatchEnvelope = {
+  patch_id: 'patch-001',
+  expected_revision: 5,
+  mode: 'APPLY',
+  operations: [
+    {
+      op: 'replace',
+      path: '/checklist_entries/E-1/status',
+      value: 'FULLY_EXECUTED',
+      rationale: 'All signatures received'
+    }
+  ]
+};
+
+// Step 1: Validate
+const validationResult = await validateChecklistPatch({
+  checklist_id: 'checklist-123',
+  checklist,
+  current_revision: currentRevision,
+  patch
+});
+
+if (!validationResult.ok) {
+  console.error('Validation failed:', validationResult.diagnostics);
+  return;
+}
+
+console.log('Validation succeeded:', validationResult.validation_id);
+
+// Step 2: Apply
+const applyResult = await applyChecklistPatch({
+  checklist_id: 'checklist-123',
+  checklist,
+  current_revision: currentRevision,
+  request: {
+    validation_id: validationResult.validation_id,
+    patch
+  }
+});
+
+if (!applyResult.ok) {
+  console.error('Apply failed:', applyResult.message);
+  return;
+}
+
+console.log('Applied patch:', applyResult.patch_id);
+console.log('New revision:', applyResult.new_revision);
+console.log('Updated checklist:', applyResult.checklist);
+```
+
+### Proposed Mode (Review Workflow)
+
+```typescript
+const proposedPatch: ChecklistPatchEnvelope = {
+  patch_id: 'patch-002',
+  expected_revision: 5,
+  mode: 'PROPOSED',  // Don't apply yet
+  operations: [
+    {
+      op: 'replace',
+      path: '/checklist_entries/E-2/responsible_party/organization',
+      value: 'New Corp',
+      rationale: 'Change of control'
+    }
+  ]
+};
+
+// Validate and stage (doesn't increment revision)
+const validationResult = await validateChecklistPatch({
+  checklist_id: 'checklist-123',
+  checklist,
+  current_revision: 5,
+  patch: proposedPatch
+});
+
+const applyResult = await applyChecklistPatch({
+  checklist_id: 'checklist-123',
+  checklist,
+  current_revision: 5,
+  request: {
+    validation_id: validationResult.validation_id,
+    patch: proposedPatch
+  }
+});
+
+// applyResult.applied === false
+// applyResult.new_revision === 5 (unchanged)
+// Patch is recorded in proposed_patch_store for later approval
+```
+
+### Handling Revision Conflicts
+
+```typescript
+const patch: ChecklistPatchEnvelope = {
+  patch_id: 'patch-003',
+  expected_revision: 5,  // But current is 6
+  mode: 'APPLY',
+  operations: [/* ... */]
+};
+
+const result = await validateChecklistPatch({
+  checklist_id: 'checklist-123',
+  checklist,
+  current_revision: 6,  // Mismatch!
+  patch
+});
+
+// result.ok === false
+// result.diagnostics[0].code === 'REVISION_CONFLICT'
+// User must fetch latest revision and retry
+```
+
+## Storage Adapters
+
+### Validation Store
+
+```typescript
+interface ChecklistPatchValidationStore {
+  set(artifact: ChecklistPatchValidationArtifact): Promise<void>;
+  get(validationId: string): Promise<ChecklistPatchValidationArtifact | null>;
+  delete(validationId: string): Promise<void>;
+}
+
+// Set custom store
+import { setChecklistPatchValidationStore } from 'openagreements';
+setChecklistPatchValidationStore(myRedisStore);
+```
+
+### Applied Patch Store
+
+```typescript
+interface ChecklistAppliedPatchStore {
+  get(checklistId: string, patchId: string): Promise<ChecklistAppliedPatchRecord | null>;
+  set(record: ChecklistAppliedPatchRecord): Promise<void>;
+}
+
+import { setChecklistAppliedPatchStore } from 'openagreements';
+setChecklistAppliedPatchStore(myDatabaseStore);
+```
+
+### Proposed Patch Store
+
+```typescript
+interface ChecklistProposedPatchStore {
+  get(checklistId: string, patchId: string): Promise<ChecklistProposedPatchRecord | null>;
+  set(record: ChecklistProposedPatchRecord): Promise<void>;
+}
+
+import { setChecklistProposedPatchStore } from 'openagreements';
+setChecklistProposedPatchStore(myDatabaseStore);
+```
+
+<Info>
+  By default, all stores use in-memory implementations. For production, implement custom stores backed by Redis, PostgreSQL, or your database of choice.
+</Info>
+
+## Related Functions
+
+- **computeChecklistPatchHash()** - Compute SHA-256 hash of patch operations
+- **getChecklistPatchValidationArtifact()** - Retrieve validation artifact by ID
+- **applyChecklistPatchOperations()** - Low-level function to apply operations to a checklist (no validation)
+
+<Card title="DOCX Import" icon="file-import" href="/api/checklist/import-export">
+  Learn how to generate patches from edited DOCX files
+</Card>

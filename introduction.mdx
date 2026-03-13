@@ -1,0 +1,130 @@
+---
+title: "Introduction"
+description: "Fill standard legal agreement templates and produce signable DOCX files"
+---
+
+# Welcome to OpenAgreements
+
+OpenAgreements is an open-source CLI tool and TypeScript library for filling standard legal agreement templates and producing professionally formatted, signable DOCX files. Built by the team behind [UseJunior.com](https://usejunior.com) and used in production at Am Law 100 firms.
+
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Get up and running in under 2 minutes
+  </Card>
+  <Card title="Template Catalog" icon="file-contract" href="/templates/catalog">
+    Browse 28+ standard legal templates
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Learn the command-line interface
+  </Card>
+  <Card title="API Documentation" icon="code" href="/api/overview">
+    Use OpenAgreements as a library
+  </Card>
+</CardGroup>
+
+## How It Works
+
+<Steps>
+  <Step title="Choose a template">
+    Select from 28+ standard agreements covering NDAs, cloud terms, SAFEs, NVCA financing documents, and more.
+  </Step>
+  <Step title="Fill in your details">
+    Answer interactive prompts or provide data via JSON file. AI agents like Claude Code can interview you automatically.
+  </Step>
+  <Step title="Get a professionally formatted DOCX">
+    OpenAgreements preserves all original formatting while filling in your values, producing a signable document ready for review.
+  </Step>
+</Steps>
+
+## Key Features
+
+<CardGroup cols={2}>
+  <Card title="28+ Standard Templates" icon="files">
+    NDAs, cloud service agreements, contractor agreements, SAFEs, and NVCA financing documents
+  </Card>
+  <Card title="Preserves Formatting" icon="paintbrush">
+    Original document formatting, styles, and structure are maintained
+  </Card>
+  <Card title="AI Agent Integration" icon="robot">
+    Works seamlessly with Claude Code, Gemini, and other AI assistants via MCP
+  </Card>
+  <Card title="Recipe Engine" icon="wand-magic-sparkles">
+    Handle non-redistributable templates (NVCA) by downloading and transforming at runtime
+  </Card>
+  <Card title="Workspace Management" icon="folder-tree">
+    Organize contract repositories with topic-first planning and status tracking
+  </Card>
+  <Card title="Compliance Skills" icon="shield-check">
+    ISO 27001 and SOC 2 evidence collection and audit workflows
+  </Card>
+  <Card title="TypeScript API" icon="code">
+    Use as a library in your own applications with full type safety
+  </Card>
+  <Card title="MIT Licensed" icon="scale-balanced">
+    Open source with permissive licensing for commercial use
+  </Card>
+</CardGroup>
+
+## Template Sources
+
+OpenAgreements includes templates from trusted sources:
+
+- **[Common Paper](https://commonpaper.com)** — Cloud service agreements, NDAs, data processing agreements (CC BY 4.0)
+- **[Bonterms](https://bonterms.com)** — Professional services, mutual NDAs (CC BY 4.0)
+- **[Y Combinator](https://www.ycombinator.com/documents)** — SAFE agreements (CC BY-ND 4.0)
+- **[NVCA](https://nvca.org/model-legal-documents/)** — Financing documents downloaded at runtime
+
+<Note>
+OpenAgreements does not provide legal advice. No affiliation with or endorsement by template sources is implied. Consult an attorney for legal guidance.
+</Note>
+
+## Trust and Quality
+
+<CardGroup cols={2}>
+  <Card title="Continuous Integration" icon="check-circle">
+    Automated testing on every commit with coverage tracking
+  </Card>
+  <Card title="OpenSpec Traceability" icon="diagram-project">
+    Scenario coverage enforced via traceability gates
+  </Card>
+  <Card title="Live Health Monitoring" icon="heart-pulse">
+    Service health published via OpenStatus
+  </Card>
+  <Card title="Experienced Maintainer" icon="user-graduate">
+    Built by MIT-trained engineer and Harvard Law trained lawyer
+  </Card>
+</CardGroup>
+
+## Execution Modes
+
+OpenAgreements supports two execution modes:
+
+<Tabs>
+  <Tab title="Hosted Remote MCP">
+    Fast setup via hosted MCP connector at `https://openagreements.ai/api/mcp`. Best for non-sensitive documents and quick workflows.
+  </Tab>
+  <Tab title="Fully Local">
+    Run locally via `npx`, global install, or local stdio MCP package. Best for sensitive documents and air-gapped environments.
+  </Tab>
+</Tabs>
+
+<Info>
+Choose based on document sensitivity, internal policy, and workflow needs. See the [Trust Checklist](/advanced/trust-checklist) for a 60-second data flow summary.
+</Info>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart Guide" icon="play" href="/quickstart">
+    Fill your first template in under 2 minutes
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install OpenAgreements globally or use via npx
+  </Card>
+  <Card title="AI Agent Setup" icon="robot" href="/integrations/claude-code">
+    Configure Claude Code, Gemini, or other AI assistants
+  </Card>
+  <Card title="Template Catalog" icon="book" href="/templates/catalog">
+    Explore all available templates
+  </Card>
+</CardGroup>

@@ -1,0 +1,395 @@
+---
+title: validate
+description: Run validation pipeline on templates and recipes
+---
+
+The `validate` command runs a comprehensive validation pipeline on templates, external sources, and recipes to ensure structural integrity, metadata correctness, and license compliance.
+
+## Syntax
+
+```bash
+open-agreements validate [template] [options]
+```
+
+## Arguments
+
+<ParamField path="template" type="string" optional>
+  Template identifier to validate. If omitted, validates all templates, external sources, and recipes.
+</ParamField>
+
+## Options
+
+<ParamField path="--strict" type="flag">
+  Treat warnings (scaffolds, missing files) as errors. Useful in CI/CD pipelines.
+</ParamField>
+
+## Examples
+
+### Validate All Content
+
+```bash
+open-agreements validate
+```
+
+**Output:**
+```
+Validating template: common-paper-mutual-nda
+  PASS metadata
+  PASS template
+  PASS license
+
+Validating template: bonterms-cloud-terms-standard
+  PASS metadata
+  PASS template
+  PASS license
+
+17 template(s) validated.
+
+Validating external: yc-safe-cap
+  PASS
+
+4 external template(s) validated.
+
+Validating recipe: nvca-term-sheet
+  PASS
+
+7 recipe(s) validated.
+
+Validation PASSED
+```
+
+### Validate Single Template
+
+```bash
+open-agreements validate common-paper-mutual-nda
+```
+
+**Output:**
+```
+Validating template: common-paper-mutual-nda
+  PASS metadata
+  PASS template
+  PASS license
+
+Validation PASSED
+```
+
+### Strict Mode
+
+```bash
+open-agreements validate --strict
+```
+
+In strict mode, warnings are treated as errors and cause validation to fail.
+
+### CI/CD Integration
+
+```bash
+# Validate before publishing
+if ! open-agreements validate --strict; then
+  echo "Validation failed"
+  exit 1
+fi
+```
+
+## Validation Stages
+
+The validator runs different checks based on content type:
+
+### Template Validation
+
+For internal templates (`content/templates/`):
+
+#### 1. Metadata Validation
+
+<ParamField path="Schema" type="check">
+  Validates metadata.yaml against schema:
+  - Required fields: `name`, `description`, `license`, `fields`, `required_fields`
+  - Valid license types
+  - Field definitions match template placeholders
+</ParamField>
+
+<ParamField path="Required Fields" type="check">
+  Ensures all fields marked as required exist in the fields list
+</ParamField>
+
+<ParamField path="Field Coverage" type="check">
+  Verifies all template placeholders have corresponding field definitions
+</ParamField>
+
+#### 2. Template Validation
+
+<ParamField path="DOCX Structure" type="check">
+  Validates template.docx file:
+  - File exists and is readable
+  - Valid DOCX ZIP structure
+  - Contains required OOXML parts
+</ParamField>
+
+<ParamField path="Placeholder Format" type="check">
+  Checks `{tag}` placeholders:
+  - Matching opening and closing braces
+  - Valid tag names
+  - No nested placeholders
+</ParamField>
+
+<ParamField path="Field Coverage" type="check">
+  Ensures all metadata fields appear in template
+</ParamField>
+
+#### 3. License Validation
+
+<ParamField path="LICENSE File" type="check">
+  Verifies LICENSE file exists and contains expected content
+</ParamField>
+
+<ParamField path="Attribution" type="check">
+  Validates attribution_text in metadata matches license requirements
+</ParamField>
+
+### External Template Validation
+
+For external templates (`content/external/`):
+
+<ParamField path="Metadata" type="check">
+  Similar to template validation but allows CC BY-ND license
+</ParamField>
+
+<ParamField path="Source File" type="check">
+  Validates vendored source document exists and is unmodified
+</ParamField>
+
+<ParamField path="No Derivatives" type="check">
+  Ensures template is not modified (CC BY-ND compliance)
+</ParamField>
+
+### Recipe Validation
+
+For recipes (`content/recipes/`):
+
+<ParamField path="Metadata" type="check">
+  Validates recipe.yaml:
+  - Source URL and download hash
+  - Clean configuration
+  - Replacement mappings
+</ParamField>
+
+<ParamField path="Clean Config" type="check">
+  Validates clean.json structure:
+  - Footnote removal rules
+  - Comment pattern matching
+  - Text deletion patterns
+</ParamField>
+
+<ParamField path="Replacements" type="check">
+  Validates replacements.json:
+  - Bracket placeholders map to `{tags}`
+  - No circular replacements
+  - Valid tag names
+</ParamField>
+
+<ParamField path="Scaffold Detection" type="check">
+  Warns if recipe appears to be a scaffold (missing source files)
+</ParamField>
+
+## Validation Output
+
+### Success
+
+```
+Validation PASSED
+```
+
+Exit code: `0`
+
+### Failure
+
+```
+Validating template: broken-template
+  FAIL metadata: Missing required field: name
+  FAIL template: Placeholder {invalid-name} not defined in metadata
+  PASS license
+
+Validation FAILED
+```
+
+Exit code: `1`
+
+### Warnings
+
+```
+Validating recipe: nvca-term-sheet
+  PASS (scaffold)
+  WARN: Source DOCX not downloaded
+
+1 recipe(s) validated.
+```
+
+In normal mode: Exit code `0` (warning only)
+In strict mode: Exit code `1` (warning becomes error)
+
+## Common Validation Errors
+
+<AccordionGroup>
+  <Accordion title="Missing Required Metadata Field">
+    ```
+    FAIL metadata: Missing required field: description
+    ```
+    
+    **Solution**: Add the missing field to `metadata.yaml`:
+    ```yaml
+    description: Template description here
+    ```
+  </Accordion>
+
+  <Accordion title="Undefined Placeholder">
+    ```
+    FAIL template: Placeholder {company_name} not defined in metadata
+    ```
+    
+    **Solution**: Add field definition to `metadata.yaml`:
+    ```yaml
+    fields:
+      - name: company_name
+        type: string
+        description: Legal name of company
+    ```
+  </Accordion>
+
+  <Accordion title="Missing Field in Template">
+    ```
+    FAIL template: Field 'contact_email' defined in metadata but not found in template
+    ```
+    
+    **Solution**: Either:
+    - Add `{contact_email}` placeholder to template.docx
+    - Remove field from metadata.yaml if not needed
+  </Accordion>
+
+  <Accordion title="Invalid License">
+    ```
+    FAIL metadata: Invalid license: Unknown License
+    ```
+    
+    **Solution**: Use a valid license identifier:
+    - `CC BY 4.0` (internal templates)
+    - `CC BY-ND 4.0` (external templates)
+    - `CC0 1.0` (public domain)
+  </Accordion>
+
+  <Accordion title="Template Not Found">
+    ```
+    Agreement "template-name" not found in templates, external, or recipes.
+    ```
+    
+    **Solution**: Check template name spelling or use `open-agreements list` to see available templates.
+  </Accordion>
+
+  <Accordion title="Recipe Source Drift">
+    ```
+    FAIL: Source hash mismatch (expected abc123, got def456)
+    ```
+    
+    **Solution**: The source document has changed. Update recipe configuration or re-run source drift check:
+    ```bash
+    npm run check:source-drift
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Use Cases
+
+### Development Workflow
+
+```bash
+# After modifying a template
+open-agreements validate common-paper-mutual-nda
+
+# Before committing changes
+open-agreements validate
+```
+
+### CI/CD Pipeline
+
+```yaml
+# GitHub Actions example
+- name: Validate templates
+  run: open-agreements validate --strict
+```
+
+```bash
+# GitLab CI example
+validate:
+  script:
+    - npm install -g open-agreements
+    - open-agreements validate --strict
+```
+
+### Pre-commit Hook
+
+```bash
+# .git/hooks/pre-commit
+#!/bin/bash
+open-agreements validate --strict
+```
+
+## Validation vs Fill
+
+Validation checks structural integrity, while fill checks data completeness:
+
+<Tabs>
+  <Tab title="Validation">
+    - Template structure is valid
+    - Metadata matches template
+    - License files present
+    - No template errors
+    
+    **Does not check**: Whether you have values for required fields
+  </Tab>
+  
+  <Tab title="Fill">
+    - All required fields provided
+    - Field values are present
+    - Template allows derivatives
+    
+    **Assumes**: Template is structurally valid (run validate first)
+  </Tab>
+</Tabs>
+
+## Strict Mode Details
+
+With `--strict` flag, the following warnings become errors:
+
+<ResponseField name="Scaffold Recipes" type="error">
+  Recipes missing source DOCX files (scaffolds)
+</ResponseField>
+
+<ResponseField name="Missing Optional Files" type="error">
+  Optional files referenced but not present
+</ResponseField>
+
+<ResponseField name="Source Drift Warnings" type="error">
+  Recipe source documents with hash mismatches
+</ResponseField>
+
+Use strict mode in CI/CD to catch potential issues before deployment.
+
+## Best Practices
+
+<Tip>
+  Run `validate` before committing template changes to catch issues early.
+</Tip>
+
+<Tip>
+  Use `--strict` in CI/CD pipelines to enforce high quality standards.
+</Tip>
+
+<Warning>
+  Validation passes do not guarantee legal accuracy. Always have legal counsel review template content.
+</Warning>
+
+## See Also
+
+- [fill](/cli/fill) - Fill validated templates with data
+- [list](/cli/list) - List available templates
+- [Adding Templates](../templates/adding-templates) - Guide for creating new templates

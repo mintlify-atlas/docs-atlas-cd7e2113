@@ -1,0 +1,222 @@
+---
+title: Compliance Skills
+description: ISO 27001 and SOC 2 compliance agent skills for evidence collection, internal audits, and readiness assessments
+---
+
+OpenAgreements includes AI agent skills for ISO 27001 and SOC 2 compliance work. These are markdown-only procedural skills — no scripts executed, no secrets required, evidence stays local.
+
+Developed with [Hazel Castro](https://internalisoaudit.com) (ISO 27001 Lead Auditor, 14+ years, 100+ audits).
+
+## Available Skills
+
+### ISO 27001 Evidence Collection
+
+Collect, organize, and validate evidence for ISO 27001 and SOC 2 audits. API-first approach with CLI commands for major cloud platforms. Produces timestamped, auditor-ready evidence packages.
+
+**Install:**
+```bash
+npx skills add open-agreements/open-agreements --skill iso-27001-evidence-collection
+```
+
+**Key Features:**
+- API-first evidence collection commands for GitHub, GCP, Azure, Google Workspace
+- Evidence hierarchy ranking (API exports > system reports > config exports > screenshots)
+- Automated naming convention: `{control_id}_{evidence_type}_{YYYY-MM-DD}.{ext}`
+- Freshness requirements by evidence type (30-365 days)
+- Evidence validation checklist
+
+**Example Workflows:**
+- Pre-audit evidence package preparation (2-4 weeks before auditor)
+- Quarterly evidence refresh
+- Post-remediation evidence collection
+- New system onboarding baseline
+- Evidence gap analysis
+
+**Evidence Collection Examples:**
+
+<CodeGroup>
+```bash GitHub Evidence
+# MFA requirement and org settings
+gh api orgs/{org} | jq '{
+  two_factor_requirement_enabled,
+  default_repository_permission
+}' > evidence/A.5.17_github-org-mfa_$(date +%Y-%m-%d).json
+
+# Branch protection on production repos
+gh api repos/{org}/$repo/branches/main/protection
+```
+
+```bash GCP Evidence
+# IAM policy (access control)
+gcloud projects get-iam-policy {project} --format=json \
+  > evidence/A.5.15_gcp-iam-policy_$(date +%Y-%m-%d).json
+
+# Cloud SQL backup config
+gcloud sql backups list --instance={instance} --format=json
+```
+
+```bash Azure Evidence
+# Role assignments (access control)
+az role assignment list --all --output json \
+  > evidence/A.5.15_azure-role-assignments_$(date +%Y-%m-%d).json
+
+# Activity log (audit trail)
+az monitor activity-log list --max-events 100 --output json
+```
+</CodeGroup>
+
+### ISO 27001 Internal Audit
+
+Run a structured internal audit against ISO 27001:2022. Walk through controls by domain, identify gaps, collect evidence, and generate findings with corrective action recommendations.
+
+**Install:**
+```bash
+npx skills add open-agreements/open-agreements --skill iso-27001-internal-audit
+```
+
+**Key Features:**
+- Covers 48 priority Annex A controls (of 93 total) — most critical for cloud-native startups
+- 4 control domains: Organizational, People, Physical, Technological
+- ISMS clauses 4-10 assessment (30 sub-clauses)
+- Control tiering: Critical (~30), Relevant (~30), Checkbox (~33)
+- Findings generation with severity classification
+
+**When to Use:**
+- 4-6 weeks before surveillance or certification audit
+- Quarterly internal audit (ISO 27001 requires at least annual)
+- Post-incident review
+- New framework adoption
+- Onboarding a new compliance tool
+
+**Top 10 Controls That Fail Most Often:**
+
+| Control | Common Failure | Quick Fix |
+|---------|---------------|-----------|
+| A.5.15 | No periodic access review | Schedule quarterly reviews, export user lists |
+| A.8.8 | No vulnerability scanning | Deploy Dependabot/Snyk, schedule infra scans |
+| A.5.24 | Incident response plan untested | Run tabletop exercise, document results |
+| A.8.5 | MFA not enforced everywhere | Enable MFA on all production + admin accounts |
+| A.5.30 | No business continuity test | Run DR failover test, document RTO/RPO |
+| A.8.15 | Audit logs not centralized | Ship logs to SIEM/CloudWatch |
+| A.8.9 | No baseline configuration | Document server/container base images |
+| A.6.1 | Background checks incomplete | Verify all employees have completed screening |
+| A.8.32 | No change management process | Require PR reviews, document deployment |
+| A.5.9 | Asset inventory incomplete | Export from cloud provider + endpoint mgmt |
+
+### SOC 2 Readiness
+
+Assess SOC 2 Type II readiness. Map Trust Services Criteria to controls, identify gaps, and build a prioritized remediation plan with NIST SP 800-53 cross-mapping.
+
+**Install:**
+```bash
+npx skills add open-agreements/open-agreements --skill soc2-readiness
+```
+
+**Key Features:**
+- 5 Trust Services Categories: Security (CC, always required), Availability, Processing Integrity, Confidentiality, Privacy
+- 33 Common Criteria (CC 1-9) mapped to NIST controls
+- ~70% overlap with ISO 27001 Annex A controls
+- Gap analysis with prioritization and remediation planning
+- Type I vs. Type II guidance
+
+**Trust Services Categories:**
+
+| Category | Criteria | When Required |
+|----------|----------|---------------|
+| **Security** (CC) | CC 1-9 (33 criteria) | Always required |
+| **Availability** (A) | A 1.1-1.3 (3 criteria) | SaaS with uptime SLAs |
+| **Processing Integrity** (PI) | PI 1.1-1.5 (4 criteria) | Data processing services |
+| **Confidentiality** (C) | C 1.1-1.2 (2 criteria) | Handling confidential data |
+| **Privacy** (P) | P 4-8 (7 criteria) | PII processing |
+
+**Top SOC 2 Failures:**
+
+| Criterion | Common Failure | Fix |
+|-----------|---------------|-----|
+| CC 6.1 | MFA not universal | Enforce MFA on all systems with sensitive data |
+| CC 6.2 | Access not revoked on termination | Automate deprovisioning; verify within 24h |
+| CC 7.2 | No log monitoring | Configure alerts for auth failures, privilege changes |
+| CC 8.1 | No change management | Require PR reviews; document deployment process |
+| CC 7.5 | Backups never tested | Restore from backup quarterly; document results |
+| CC 3.2 | No risk assessment | Conduct and document annual risk assessment |
+| CC 6.6 | No vulnerability scanning | Deploy automated scanning; remediate criticals in 30d |
+| CC 1.4 | Security training incomplete | Require annual training; track completion |
+
+## Security Model
+
+All three compliance skills follow a strict security model:
+
+- **No scripts executed** — markdown-only procedural guidance
+- **No secrets required** — works with reference checklists; CLI commands use existing local credentials
+- **Evidence stays local** — all outputs go to the local filesystem
+- **IP-clean** — references NIST SP 800-53 (public domain); ISO controls cited by section ID only
+
+## Runtime Modes
+
+Skills operate in three modes, detected automatically:
+
+1. **Internal ISO Audit MCP server available** (best)
+   - Live control guidance lookup, NIST cross-references, full-text search
+   - Server: `internalisoaudit.com/api/mcp`
+   - Tools: `get_control_guidance`, `list_controls`, `get_nist_mapping`, `search_guidance`
+
+2. **Local compliance data available** (good)
+   - Reads `compliance/` directory directly
+   - Historical test data, evidence status, control mappings
+
+3. **Reference only** (baseline)
+   - Always available
+   - Uses embedded checklists and command reference
+   - Procedural guidance, control descriptions, evidence checklists
+
+## Framework Cross-Mapping
+
+### SOC 2 vs. ISO 27001
+
+| Dimension | SOC 2 | ISO 27001 |
+|-----------|-------|-----------||
+| Governing body | AICPA | ISO/IEC |
+| Geography | Primarily US/Canada | Global |
+| Type | Attestation report by CPA | Certification by audit body |
+| Scope | Service-specific | Organization-wide ISMS |
+| Controls | Flexible (you define) | 93 Annex A controls |
+| Output | SOC 2 report (restricted/general use) | Certificate |
+| Overlap | ~70% overlap with ISO 27001 Annex A | ~70% overlap with SOC 2 CC |
+
+### NIST SP 800-53 Mapping
+
+All skills use NIST SP 800-53 Rev 5 (public domain) as their canonical reference:
+
+- **ISO 27001 Controls** → NIST Controls → SOC 2 Criteria
+- **Bidirectional mapping** for dual-framework compliance
+- **Public domain reference** ensures IP-clean implementation
+
+**Example Mapping:**
+- ISO 27001 A.5.15 (Access control) → NIST AC-2 (Account Management) → SOC 2 CC 6.1, 6.2
+- ISO 27001 A.8.8 (Vulnerability management) → NIST RA-5 (Vulnerability Scanning) → SOC 2 CC 6.6
+- ISO 27001 A.5.24 (Incident response) → NIST IR-4 (Incident Handling) → SOC 2 CC 7.3, 7.4
+
+## Resources
+
+- [Skills.sh Open Agreements Collection](https://skills.sh/open-agreements)
+- [Internal ISO Audit](https://internalisoaudit.com)
+- [NIST SP 800-53 Rev 5](https://csrc.nist.gov/publications/detail/sp/800-53/rev-5/final)
+- [AICPA Trust Services Criteria](https://www.aicpa.org/interestareas/frc/assuranceadvisoryservices/trustdataintegritytaskforce.html)
+- [ISO 27001:2022 Overview](https://www.iso.org/standard/27001)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Install Skills" icon="download" href="/installation">
+    Add compliance skills to Claude Code or Cursor
+  </Card>
+  <Card title="Evidence Collection Guide" icon="database" href="/advanced/compliance-skills">
+    Learn how to collect audit-ready evidence
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/advanced/architecture">
+    Understand system components and design
+  </Card>
+  <Card title="Contributing" icon="code-pull-request" href="/advanced/contributing">
+    Add templates, recipes, or improvements
+  </Card>
+</CardGroup>

@@ -1,0 +1,620 @@
+---
+title: checklist
+description: Work with closing checklists for deal management
+---
+
+The `checklist` command manages structured closing checklists for deal transactions, supporting creation, updates via JSON patches, rendering to DOCX, and audit history tracking.
+
+## Syntax
+
+```bash
+open-agreements checklist <subcommand> [options]
+```
+
+## Subcommands
+
+<CardGroup cols={2}>
+  <Card title="create" icon="plus">
+    Initialize a new checklist in the state directory
+  </Card>
+  <Card title="list" icon="list">
+    List all checklists
+  </Card>
+  <Card title="show" icon="eye">
+    Show current checklist state
+  </Card>
+  <Card title="update" icon="pen">
+    Validate and apply a patch to a checklist
+  </Card>
+  <Card title="render" icon="file-export">
+    Render a checklist to DOCX
+  </Card>
+  <Card title="history" icon="clock-rotate-left">
+    Show update history for a checklist
+  </Card>
+</CardGroup>
+
+---
+
+## checklist create
+
+Initialize a new closing checklist.
+
+### Syntax
+
+```bash
+open-agreements checklist create <deal-name> [options]
+```
+
+### Arguments
+
+<ParamField path="deal-name" type="string" required>
+  Deal name for the checklist (e.g., "Acme-Series-A")
+</ParamField>
+
+### Options
+
+<ParamField path="-d, --data" type="string">
+  JSON file with initial checklist data (brownfield import)
+</ParamField>
+
+### Examples
+
+#### Create Empty Checklist
+
+```bash
+open-agreements checklist create "Acme Series A"
+```
+
+**Output:**
+```
+Created checklist "Acme Series A"
+UUID: 550e8400-e29b-41d4-a716-446655440000
+```
+
+#### Create with Initial Data
+
+```bash
+open-agreements checklist create "Acme Series A" -d initial-checklist.json
+```
+
+**initial-checklist.json:**
+```json
+{
+  "deal_name": "Acme Series A",
+  "updated_at": "2024-03-15",
+  "checklist_entries": {
+    "entry_1": {
+      "title": "Draft term sheet",
+      "status": "complete",
+      "responsible_party": {
+        "individual_name": "Jane Smith",
+        "organization": "Acme Corp"
+      }
+    }
+  },
+  "documents": {},
+  "action_items": {},
+  "issues": {}
+}
+```
+
+---
+
+## checklist list
+
+List all checklists in the state directory.
+
+### Syntax
+
+```bash
+open-agreements checklist list
+```
+
+### Examples
+
+```bash
+open-agreements checklist list
+```
+
+**Output:**
+```
+Checklists:
+
+  Acme Series A
+    UUID: 550e8400-e29b-41d4-a716-446655440000
+    Revision: 5  Updated: 2024-03-15
+
+  Beta Acquisition
+    UUID: 660e8400-e29b-41d4-a716-446655440001
+    Revision: 12  Updated: 2024-03-14
+```
+
+---
+
+## checklist show
+
+Display current checklist state.
+
+### Syntax
+
+```bash
+open-agreements checklist show <name-or-id> [options]
+```
+
+### Arguments
+
+<ParamField path="name-or-id" type="string" required>
+  Deal name or UUID of the checklist
+</ParamField>
+
+### Options
+
+<ParamField path="--json" type="flag">
+  Print full JSON state
+</ParamField>
+
+### Examples
+
+#### Human-Readable Summary
+
+```bash
+open-agreements checklist show "Acme Series A"
+```
+
+**Output:**
+```
+Acme Series A
+UUID: 550e8400-e29b-41d4-a716-446655440000  Revision: 5  Updated: 2024-03-15
+
+Documents: 8  Entries: 24  Actions: 3  Issues: 1
+
+  [✓] Draft term sheet  (Jane Smith, Acme Corp)
+  [○] Negotiate term sheet  (Bob Jones, Investor Co)
+  [✓] Execute NDA
+  [○] Prepare due diligence checklist
+  [△] Review cap table  (Sarah Lee, Acme Corp)
+  ...
+```
+
+**Status symbols:**
+- `[✓]` complete
+- `[○]` pending
+- `[△]` in_progress
+- `[✗]` blocked
+- `[~]` not_applicable
+
+#### JSON Output
+
+```bash
+open-agreements checklist show "Acme Series A" --json
+```
+
+**Output:**
+```json
+{
+  "checklist_id": "550e8400-e29b-41d4-a716-446655440000",
+  "revision": 5,
+  "checklist": {
+    "deal_name": "Acme Series A",
+    "updated_at": "2024-03-15",
+    "checklist_entries": { ... },
+    "documents": { ... },
+    "action_items": { ... },
+    "issues": { ... }
+  }
+}
+```
+
+---
+
+## checklist update
+
+Validate and apply a patch to a checklist (unified command).
+
+### Syntax
+
+```bash
+open-agreements checklist update <name-or-id> -d <patch-file>
+```
+
+### Arguments
+
+<ParamField path="name-or-id" type="string" required>
+  Deal name or UUID of the checklist
+</ParamField>
+
+### Options
+
+<ParamField path="-d, --data" type="string" required>
+  Patch envelope JSON file
+</ParamField>
+
+### Examples
+
+```bash
+open-agreements checklist update "Acme Series A" -d patch.json
+```
+
+**patch.json:**
+```json
+{
+  "patch_id": "patch-001",
+  "operations": [
+    {
+      "op": "add",
+      "path": "/checklist_entries/entry_new",
+      "value": {
+        "title": "Review financial statements",
+        "status": "pending",
+        "responsible_party": {
+          "individual_name": "John Doe",
+          "organization": "Investor Co"
+        }
+      }
+    },
+    {
+      "op": "replace",
+      "path": "/checklist_entries/entry_1/status",
+      "value": "complete"
+    }
+  ]
+}
+```
+
+**Output:**
+```
+Applied patch "patch-001" to "Acme Series A"
+Revision: 5 → 6
+```
+
+If patch already applied (idempotent):
+```
+Checklist state unchanged (idempotent replay).
+```
+
+### Patch Operations
+
+Supported JSON Patch operations:
+
+<ParamField path="add" type="operation">
+  Add new entry, document, action, or issue:
+  ```json
+  {"op": "add", "path": "/checklist_entries/entry_5", "value": {...}}
+  ```
+</ParamField>
+
+<ParamField path="replace" type="operation">
+  Update existing field:
+  ```json
+  {"op": "replace", "path": "/checklist_entries/entry_1/status", "value": "complete"}
+  ```
+</ParamField>
+
+<ParamField path="remove" type="operation">
+  Remove entry (use with caution):
+  ```json
+  {"op": "remove", "path": "/action_items/action_3"}
+  ```
+</ParamField>
+
+---
+
+## checklist render
+
+Render a checklist to DOCX format.
+
+### Syntax
+
+```bash
+open-agreements checklist render <name-or-id> [options]
+```
+
+### Arguments
+
+<ParamField path="name-or-id" type="string" required>
+  Deal name or UUID of the checklist
+</ParamField>
+
+### Options
+
+<ParamField path="-o, --output" type="string" default="closing-checklist.docx">
+  Output file path
+</ParamField>
+
+### Examples
+
+```bash
+open-agreements checklist render "Acme Series A" -o acme-checklist.docx
+```
+
+**Output:**
+```
+Rendered checklist for "Acme Series A"
+Output: /path/to/acme-checklist.docx
+```
+
+The rendered DOCX includes:
+- Deal name and metadata
+- Checklist entries with status indicators
+- Document references
+- Action items
+- Issues and blockers
+- Responsible parties
+
+---
+
+## checklist history
+
+Show update history for a checklist.
+
+### Syntax
+
+```bash
+open-agreements checklist history <name-or-id>
+```
+
+### Arguments
+
+<ParamField path="name-or-id" type="string" required>
+  Deal name or UUID of the checklist
+</ParamField>
+
+### Examples
+
+```bash
+open-agreements checklist history "Acme Series A"
+```
+
+**Output:**
+```
+Update history:
+
+  2024-03-15T10:30:00.000Z  patch-003
+    Revision: 4 → 5  Operations: 2
+
+  2024-03-14T16:45:00.000Z  patch-002
+    Revision: 3 → 4  Operations: 5
+
+  2024-03-13T09:15:00.000Z  patch-001
+    Revision: 2 → 3  Operations: 1
+```
+
+---
+
+## Advanced: patch-validate and patch-apply
+
+For programmatic integrations, separate validate/apply commands are available:
+
+### checklist patch-validate
+
+Validate a patch without applying it (dry run).
+
+```bash
+open-agreements checklist patch-validate \
+  --state state.json \
+  --patch patch.json \
+  -o validation-result.json \
+  --validation-store validations.json
+```
+
+### checklist patch-apply
+
+Apply a previously validated patch.
+
+```bash
+open-agreements checklist patch-apply \
+  --state state.json \
+  --request apply-request.json \
+  -o apply-result.json \
+  --validation-store validations.json \
+  --applied-store applied.json \
+  --proposed-store proposed.json
+```
+
+See `open-agreements checklist patch-validate --help` and `open-agreements checklist patch-apply --help` for details.
+
+---
+
+## Checklist Schema
+
+### Root Structure
+
+```json
+{
+  "deal_name": "string",
+  "updated_at": "YYYY-MM-DD",
+  "checklist_entries": { ... },
+  "documents": { ... },
+  "action_items": { ... },
+  "issues": { ... }
+}
+```
+
+### Checklist Entry
+
+```json
+{
+  "title": "Task description",
+  "status": "pending" | "in_progress" | "complete" | "blocked" | "not_applicable",
+  "responsible_party": {
+    "individual_name": "Jane Smith",
+    "organization": "Acme Corp"
+  },
+  "due_date": "2024-03-20",
+  "notes": "Optional notes"
+}
+```
+
+### Document Reference
+
+```json
+{
+  "title": "Document title",
+  "document_type": "agreement" | "disclosure" | "certificate" | ...,
+  "status": "draft" | "final" | "executed",
+  "location": "file path or URL"
+}
+```
+
+### Action Item
+
+```json
+{
+  "description": "Action description",
+  "assigned_to": "Person name",
+  "due_date": "2024-03-20",
+  "status": "open" | "in_progress" | "complete"
+}
+```
+
+### Issue
+
+```json
+{
+  "description": "Issue description",
+  "severity": "low" | "medium" | "high" | "critical",
+  "status": "open" | "acknowledged" | "resolved",
+  "identified_by": "Person name",
+  "resolution": "Optional resolution notes"
+}
+```
+
+## State Management
+
+Checklists are stored in the state directory (default: `~/.open-agreements/state/checklists/`):
+
+```
+~/.open-agreements/state/checklists/
+├── 550e8400-e29b-41d4-a716-446655440000/
+│   ├── state.json          # Current checklist state
+│   └── history.jsonl       # Patch application history
+└── 660e8400-e29b-41d4-a716-446655440001/
+    ├── state.json
+    └── history.jsonl
+```
+
+### state.json
+
+```json
+{
+  "checklist_id": "550e8400-e29b-41d4-a716-446655440000",
+  "revision": 5,
+  "checklist": { ... }
+}
+```
+
+### history.jsonl
+
+JSON Lines format with one entry per applied patch:
+
+```json
+{"patch_id":"patch-001","applied_at":"2024-03-13T09:15:00.000Z","revision_before":2,"revision_after":3,"operation_count":1}
+{"patch_id":"patch-002","applied_at":"2024-03-14T16:45:00.000Z","revision_before":3,"revision_after":4,"operation_count":5}
+```
+
+## Error Handling
+
+<AccordionGroup>
+  <Accordion title="Checklist Not Found">
+    ```
+    Checklist not found: "Unknown Deal"
+    ```
+    
+    **Solution**: Use `open-agreements checklist list` to see available checklists.
+  </Accordion>
+
+  <Accordion title="Patch Validation Failed">
+    ```
+    Patch validation failed:
+      [invalid_operation] Invalid path: /nonexistent/path
+      [missing_required] Field 'status' is required
+    ```
+    
+    **Solution**: Fix patch operations according to schema requirements.
+  </Accordion>
+
+  <Accordion title="Invalid JSON">
+    ```
+    Validation errors:
+      checklist.deal_name: Required
+      checklist.updated_at: Invalid date format
+    ```
+    
+    **Solution**: Ensure JSON matches checklist schema.
+  </Accordion>
+
+  <Accordion title="Template Not Found (Render)">
+    ```
+    Error: closing-checklist template not found
+    ```
+    
+    **Solution**: Ensure OpenAgreements includes the closing-checklist template. May require package update.
+  </Accordion>
+</AccordionGroup>
+
+## Use Cases
+
+<Tabs>
+  <Tab title="M&A Closing">
+    Track merger/acquisition closing tasks:
+    - Regulatory approvals
+    - Document execution
+    - Escrow setup
+    - Post-closing obligations
+  </Tab>
+  
+  <Tab title="Venture Financing">
+    Manage Series A/B/C closings:
+    - Term sheet negotiation
+    - Due diligence
+    - Legal document drafting
+    - Board approvals
+    - Closing conditions
+  </Tab>
+  
+  <Tab title="Real Estate">
+    Track property transactions:
+    - Title review
+    - Inspection contingencies
+    - Financing approvals
+    - Document recording
+  </Tab>
+  
+  <Tab title="Contract Management">
+    Monitor contract execution:
+    - Draft review cycles
+    - Stakeholder approvals
+    - Signature collection
+    - Effective date tracking
+  </Tab>
+</Tabs>
+
+## Best Practices
+
+<Tip>
+  Use meaningful patch IDs for tracking:
+  ```json
+  {"patch_id": "2024-03-15-add-due-diligence-items"}
+  ```
+</Tip>
+
+<Tip>
+  Keep checklist entries atomic - one task per entry. Break complex tasks into multiple entries.
+</Tip>
+
+<Warning>
+  Always validate patches with `update` command before applying. The unified command runs validation automatically.
+</Warning>
+
+<Tip>
+  Use `history` command to audit changes and track who updated what:
+  ```bash
+  open-agreements checklist history "Deal Name" | grep patch-id
+  ```
+</Tip>
+
+## See Also
+
+- [fill](/cli/fill) - Fill agreement templates
+- [validate](/cli/validate) - Validate template structure

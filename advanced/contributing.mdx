@@ -1,0 +1,475 @@
+---
+title: Contributing
+description: Guidelines for contributing templates, recipes, bug fixes, and documentation to OpenAgreements
+---
+
+Thanks for your interest in contributing! OpenAgreements is an open-source tool for filling standard legal agreement templates. Contributions of new templates, recipe improvements, bug fixes, and documentation are welcome.
+
+## Code of Conduct
+
+All contributors must follow our [Code of Conduct](#code-of-conduct-summary).
+
+**Summary:**
+- Be a good human, act responsibly, comply with the law
+- Do not harm people or property
+- No unlawful or abusive conduct
+- Respect guardrails and do not mislead
+- Be transparent about AI assistance
+
+**Reporting:** `steven@usejunior.com`
+
+**Full text:** See `CODE_OF_CONDUCT.md` in the repository
+
+## Ways to Contribute
+
+### 1. Add a Template
+
+The most impactful contribution is adding a new template.
+
+**Requirements:**
+- Source document must be **CC BY 4.0** or **CC0** licensed
+- Available as DOCX with fillable fields
+- Proper attribution to original author
+
+**Process:**
+1. Verify license compatibility (CC BY 4.0 or CC0 only)
+2. Create template directory: `content/templates/{template-name}/`
+3. Add files:
+   - `template.docx` — DOCX with `{tag}` placeholders
+   - `metadata.yaml` — Fields, license, source, attribution
+   - `README.md` — Template-specific documentation
+4. Run validation: `npm run validate`
+5. Submit pull request
+
+**Example metadata.yaml:**
+```yaml
+name: common-paper-mutual-nda
+license: CC BY 4.0
+source: https://commonpaper.com/standards/mutual-nda
+attribution: Common Paper
+fields:
+  - id: party_1_name
+    label: First Party Name
+    type: text
+    required: true
+    section: parties
+  - id: governing_law
+    label: Governing Law
+    type: text
+    required: true
+    section: terms
+```
+
+**See:** [Adding Templates Guide](/templates/adding-templates) for detailed instructions
+
+### 2. Add a Recipe
+
+Recipes handle documents that aren't redistributable (e.g., NVCA model documents).
+
+**Requirements:**
+- Source document is publicly downloadable but not redistributable
+- You author transformation instructions — never commit the source DOCX
+- SHA-256 hash verification for source integrity
+
+**Process:**
+1. Create recipe directory: `content/recipes/{recipe-name}/`
+2. Add files:
+   - `metadata.yaml` — Basic metadata
+   - `recipe.yaml` — Download URL, hash, cleaning rules, patches
+   - `README.md` — Recipe documentation
+3. Test recipe: `npm run validate`
+4. Submit pull request
+
+**Example recipe.yaml:**
+```yaml
+source:
+  url: https://nvca.org/wp-content/uploads/2024/01/NVCA-Model-Indemnification-Agreement.docx
+  sha256: abc123...
+
+clean:
+  remove_footnotes: true
+  remove_comments: true
+  normalize_brackets: true
+
+patches:
+  - target: "//w:t[contains(text(), 'Company Name')]"
+    operation: replace
+    value: "{company_name}"
+
+verify:
+  - type: placeholder_check
+  - type: section_count
+    expected: 12
+```
+
+**See:** [Adding Recipes Guide](/templates/recipes) for detailed instructions
+
+### 3. Report a Bug
+
+Open an issue on GitHub with:
+
+**Required Information:**
+- What you expected to happen
+- What actually happened
+- The command you ran
+- Your Node.js version (`node -v`)
+- Your OS (macOS, Linux, Windows)
+
+**Optional but Helpful:**
+- Template name (if template-specific)
+- Sample data file (if fill command)
+- Error logs or stack traces
+- Screenshots of output (if formatting issue)
+
+**GitHub Issues:** [github.com/open-agreements/open-agreements/issues](https://github.com/open-agreements/open-agreements/issues)
+
+### 4. Improve Documentation
+
+Documentation lives in `docs/` directory.
+
+**Contribution Types:**
+- Fix typos or unclear instructions
+- Add examples or use cases
+- Clarify technical concepts
+- Add troubleshooting tips
+- Translate documentation
+
+**Process:**
+1. Edit markdown files in `docs/`
+2. Preview locally (see Development Setup)
+3. Submit pull request
+
+### 5. Fix a Bug or Add a Feature
+
+**Process:**
+1. Check existing issues for duplicates
+2. Open an issue to discuss scope (for large changes)
+3. Fork the repository
+4. Create a feature branch: `git checkout -b fix/issue-123`
+5. Make changes with tests
+6. Run quality gates (see Before Submitting a PR)
+7. Submit pull request with description
+
+## Development Setup
+
+### Prerequisites
+
+- **Node.js:** >= 20
+- **npm:** >= 9
+- **Git:** Latest
+
+### Clone and Install
+
+```bash
+git clone https://github.com/open-agreements/open-agreements.git
+cd open-agreements
+npm install
+```
+
+### Build
+
+```bash
+npm run build
+```
+
+This compiles TypeScript to `dist/` directory.
+
+### Run Tests
+
+```bash
+# Run all tests
+npm run test:run
+
+# Run tests in watch mode
+npm test
+
+# Run with coverage
+npm run test:coverage
+
+# Run specific test file
+npm test -- src/core/engine.test.ts
+```
+
+### Validate Templates
+
+```bash
+# Validate all templates and recipes
+npm run validate
+
+# Validate specific template
+node bin/open-agreements.js validate common-paper-mutual-nda
+```
+
+### Run Locally
+
+```bash
+# List templates
+node bin/open-agreements.js list
+
+# Fill a template
+node bin/open-agreements.js fill common-paper-mutual-nda \
+  -d examples/data.json \
+  -o output.docx
+```
+
+## Before Submitting a PR
+
+Ensure all quality gates pass:
+
+### 1. Build
+
+```bash
+npm run build
+```
+
+Must complete without TypeScript errors.
+
+### 2. Lint
+
+```bash
+npm run lint
+```
+
+Must pass ESLint with no warnings.
+
+### 3. Tests
+
+```bash
+npm run test:run
+```
+
+All tests must pass (81+ tests).
+
+### 4. Validation
+
+```bash
+npm run validate
+```
+
+All templates and recipes must validate.
+
+### 5. OpenSpec Coverage
+
+```bash
+npm run check:spec-coverage
+```
+
+OpenSpec scenario traceability must be maintained.
+
+### 6. Code Coverage
+
+Maintain or improve code coverage. Check Codecov report on PR.
+
+## Project Structure
+
+```
+open-agreements/
+├── content/
+│   ├── templates/        # Internal templates (CC BY 4.0)
+│   ├── external/         # External templates (CC BY-ND 4.0)
+│   └── recipes/          # Recipes (not redistributable)
+├── src/                  # TypeScript source
+│   ├── cli/              # CLI entry point
+│   ├── commands/         # Command implementations
+│   ├── core/             # Core engine and pipelines
+│   └── utils/            # Utilities
+├── integration-tests/    # Integration tests
+├── skills/               # Agent skills (Claude Code, etc.)
+├── docs/                 # Documentation
+├── packages/             # Monorepo packages
+│   ├── contracts-workspace/
+│   ├── contracts-workspace-mcp/
+│   ├── contract-templates-mcp/
+│   ├── checklist-mcp/
+│   └── docx-core/
+├── scripts/              # Build and validation scripts
+└── site/                 # Static website (Eleventy)
+```
+
+## Commit Guidelines
+
+### Commit Message Format
+
+```
+<type>: <subject>
+
+<body>
+
+<footer>
+```
+
+**Types:**
+- `feat:` — New feature
+- `fix:` — Bug fix
+- `docs:` — Documentation changes
+- `test:` — Test additions or fixes
+- `refactor:` — Code refactoring
+- `chore:` — Maintenance tasks
+- `ci:` — CI/CD changes
+
+**Example:**
+```
+feat: add Common Paper Cloud Terms template
+
+Add the Common Paper Cloud Service Agreement template with 23 fields
+across 3 sections. Includes validation tests and example data.
+
+Closes #42
+```
+
+### Branch Naming
+
+- Feature: `feat/short-description`
+- Bug fix: `fix/issue-number-description`
+- Documentation: `docs/what-changed`
+
+## Pull Request Process
+
+### 1. Create Pull Request
+
+**Include:**
+- Clear description of changes
+- Link to related issue (if applicable)
+- Screenshots (if UI/formatting changes)
+- Test coverage information
+
+**Template:**
+```markdown
+## Description
+[Describe what this PR does]
+
+## Type of Change
+- [ ] New template
+- [ ] New recipe
+- [ ] Bug fix
+- [ ] Feature
+- [ ] Documentation
+
+## Checklist
+- [ ] Build passes (`npm run build`)
+- [ ] Lint passes (`npm run lint`)
+- [ ] Tests pass (`npm run test:run`)
+- [ ] Validation passes (`npm run validate`)
+- [ ] Documentation updated (if needed)
+
+## Related Issues
+Closes #[issue number]
+```
+
+### 2. Code Review
+
+Maintainers will review and may request changes:
+- Code quality and style
+- Test coverage
+- Documentation completeness
+- License compliance (for templates)
+
+### 3. CI Checks
+
+GitHub Actions will run:
+- Lint
+- Build
+- Tests with coverage
+- Template validation
+- OpenSpec traceability
+- Isolated runtime smoke test
+
+All must pass before merge.
+
+### 4. Merge
+
+Once approved and CI passes:
+- Maintainer will merge to `main`
+- Your contribution will be included in the next release
+- You'll be credited in release notes
+
+## Licensing
+
+By contributing, you agree that:
+
+- **Code contributions** are licensed under MIT License
+- **Template content** retains the license of its source:
+  - CC BY 4.0 — Common Paper, Bonterms
+  - CC0 — Public domain
+  - CC BY-ND 4.0 — Y Combinator SAFEs
+- **Recipe instructions** are MIT licensed (source documents remain with original publisher)
+
+## Security
+
+If you discover a security vulnerability:
+
+1. **Do NOT** open a public issue
+2. Email: `steven@usejunior.com`
+3. Include:
+   - Description of vulnerability
+   - Steps to reproduce
+   - Potential impact
+   - Suggested fix (if any)
+
+We'll respond within 48 hours and coordinate disclosure.
+
+## Getting Help
+
+**Questions about contributing?**
+
+- GitHub Discussions: [github.com/open-agreements/open-agreements/discussions](https://github.com/open-agreements/open-agreements/discussions)
+- Email: `steven@usejunior.com`
+
+**Need help with development?**
+
+- Check existing issues for similar problems
+- Review documentation in `docs/`
+- Ask in GitHub Discussions
+
+## Recognition
+
+Contributors are recognized:
+
+- In release notes for their contributions
+- In the README.md contributors section (for significant contributions)
+- As co-authors in git commits (if pair programming)
+
+## Release Process
+
+Releases are automated through GitHub Actions:
+
+1. Maintainer updates versions in `package.json`
+2. Maintainer pushes commit + tag: `git push origin main --tags`
+3. GitHub Actions `Release` workflow:
+   - Runs all quality gates
+   - Publishes to npm with provenance (OIDC)
+   - Creates GitHub release with notes
+
+**Workflow:** `.github/workflows/release.yml`
+
+**Guardrails:**
+- Tag must match package versions
+- Release commit must be in `origin/main`
+- All CI gates must pass
+- npm versions must not already exist
+
+## Resources
+
+- [Repository](https://github.com/open-agreements/open-agreements)
+- [Issue Tracker](https://github.com/open-agreements/open-agreements/issues)
+- [Discussions](https://github.com/open-agreements/open-agreements/discussions)
+- [Code of Conduct](https://github.com/open-agreements/open-agreements/blob/main/CODE_OF_CONDUCT.md)
+- [Adding Templates Guide](/templates/adding-templates)
+- [Adding Recipes Guide](/templates/recipes)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Adding Templates" icon="file-plus" href="/templates/adding-templates">
+    Detailed guide for adding new templates
+  </Card>
+  <Card title="Adding Recipes" icon="book" href="/templates/recipes">
+    Guide for non-redistributable documents
+  </Card>
+  <Card title="Architecture" icon="sitemap" href="/advanced/architecture">
+    System architecture and components
+  </Card>
+  <Card title="Compliance Skills" icon="shield-check" href="/advanced/compliance-skills">
+    ISO 27001 and SOC 2 agent skills
+  </Card>
+</CardGroup>

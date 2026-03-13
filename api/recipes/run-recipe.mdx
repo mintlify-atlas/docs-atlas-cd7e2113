@@ -1,0 +1,328 @@
+---
+title: runRecipe()
+description: "Execute the full recipe pipeline: clean → patch → fill → verify"
+---
+
+## Function Signature
+
+```typescript
+async function runRecipe(
+  options: RecipeRunOptions
+): Promise<RecipeRunResult>
+```
+
+Executes the complete recipe pipeline for non-redistributable templates:
+1. **Clean** - Remove footnotes, drafting notes, and commentary
+2. **Patch** - Transform source placeholders into template tags
+3. **Fill** - Fill template tags with provided values
+4. **Verify** - Validate output document integrity
+
+If no `inputPath` is provided, automatically downloads the source document from `source_url` in the recipe metadata.
+
+## Import
+
+```typescript
+import { runRecipe } from '@openagreements/core';
+```
+
+## Parameters
+
+<ParamField path="options" type="RecipeRunOptions" required>
+  Configuration object for the recipe execution
+</ParamField>
+
+### RecipeRunOptions
+
+<ParamField path="recipeId" type="string" required>
+  Recipe identifier (subdirectory name in `content/recipes/`)
+  
+  ```typescript
+  recipeId: 'nvca-voting-agreement'
+  ```
+</ParamField>
+
+<ParamField path="outputPath" type="string" required>
+  Path where the filled DOCX document will be written
+  
+  ```typescript
+  outputPath: '/tmp/output.docx'
+  ```
+</ParamField>
+
+<ParamField path="values" type="Record<string, string | boolean>" required>
+  Field values to fill into the template. Keys must match field names defined in the recipe's `metadata.yaml`.
+  
+  ```typescript
+  values: {
+    company_name: 'Acme Corp',
+    effective_date: 'January 15, 2025',
+    amended_restated: ''  // empty string for optional field
+  }
+  ```
+</ParamField>
+
+<ParamField path="inputPath" type="string">
+  Path to the source DOCX file. If not provided, the source document is automatically downloaded from `source_url` in the recipe metadata and cached.
+  
+  ```typescript
+  inputPath: '/path/to/source.docx'  // optional
+  ```
+</ParamField>
+
+<ParamField path="keepIntermediate" type="boolean" default="false">
+  When `true`, preserves intermediate files from each pipeline stage (clean, patch, fill) in the same directory as `outputPath` with suffixes:
+  - `*-clean.docx`
+  - `*-patch.docx`
+  - `*-fill.docx`
+  
+  Useful for debugging recipe issues.
+  
+  ```typescript
+  keepIntermediate: true
+  ```
+</ParamField>
+
+<ParamField path="computedOutPath" type="string">
+  Path where the computed field artifact JSON will be written. This artifact contains:
+  - All input values
+  - Derived fill values
+  - Derived audit values (metadata not used in document)
+  - Evaluation trace showing which rules matched and what they computed
+  
+  ```typescript
+  computedOutPath: '/tmp/computed.json'
+  ```
+</ParamField>
+
+<ParamField path="normalizeBracketArtifacts" type="boolean">
+  When `true`, applies bracket normalization rules from `normalize.json` after filling. Defaults to `true` for `nvca-stock-purchase-agreement`, `false` otherwise.
+  
+  ```typescript
+  normalizeBracketArtifacts: true
+  ```
+</ParamField>
+
+## Return Value
+
+<ResponseField name="RecipeRunResult" type="object">
+  Result object containing output path, metadata, and pipeline details
+</ResponseField>
+
+### RecipeRunResult
+
+<ResponseField name="outputPath" type="string">
+  Absolute path to the filled output DOCX file
+</ResponseField>
+
+<ResponseField name="metadata" type="RecipeMetadata">
+  The recipe's metadata object loaded from `metadata.yaml`
+  
+  ```typescript
+  {
+    name: 'NVCA Model Voting Agreement',
+    description: 'Standard-form voting agreement...',
+    source_url: 'https://nvca.org/...',
+    source_version: '10-1-2025',
+    fields: [...],
+    required_fields: ['company_name', 'effective_date']
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="fieldsUsed" type="string[]">
+  Array of field names that were actually used during template filling (excludes fields that weren't referenced)
+</ResponseField>
+
+<ResponseField name="stages" type="object">
+  Paths to intermediate files from each pipeline stage
+  
+  <ResponseField name="clean" type="string">
+    Path to cleaned DOCX (only present if `keepIntermediate: true`)
+  </ResponseField>
+  
+  <ResponseField name="patch" type="string">
+    Path to patched DOCX (only present if `keepIntermediate: true`)
+  </ResponseField>
+  
+  <ResponseField name="fill" type="string">
+    Path to filled DOCX (same as `outputPath`)
+  </ResponseField>
+</ResponseField>
+
+<ResponseField name="computedArtifact" type="ComputedArtifact | undefined">
+  Computed field evaluation artifact (only present if recipe has `computed.json` or `computedOutPath` was provided)
+  
+  ```typescript
+  {
+    recipe_id: 'nvca-stock-purchase-agreement',
+    generated_at: '2026-03-13T10:30:00.000Z',
+    profile_present: true,
+    profile_version: '1.0',
+    stabilized: true,
+    pass_count: 2,
+    inputs: { state: 'delaware' },
+    final_fill_values: { state: 'delaware', state_upper: 'DELAWARE' },
+    derived_fill_values: { state_upper: 'DELAWARE' },
+    derived_audit_values: {},
+    passes: [...]  // evaluation trace
+  }
+  ```
+</ResponseField>
+
+<ResponseField name="computedOutPath" type="string | undefined">
+  Path where the computed artifact was written (only present if `computedOutPath` was provided)
+</ResponseField>
+
+## Examples
+
+### Basic Usage
+
+```typescript
+import { runRecipe } from '@openagreements/core';
+
+const result = await runRecipe({
+  recipeId: 'nvca-voting-agreement',
+  outputPath: '/tmp/voting-agreement.docx',
+  values: {
+    company_name: 'Acme Corp',
+    investor_name: 'Venture Capital Partners LLC',
+    key_holder_name: 'Jane Doe',
+    effective_date: 'January 15, 2025',
+    company_counsel: 'Smith & Associates\n123 Main St\nDelaware',
+    judicial_district: 'District of Delaware',
+    state_of_incorporation_lower: 'delaware',
+    specify_percentage: '60'
+  }
+});
+
+console.log(`Output written to: ${result.outputPath}`);
+console.log(`Fields used: ${result.fieldsUsed.join(', ')}`);
+```
+
+### With Intermediate Files
+
+```typescript
+const result = await runRecipe({
+  recipeId: 'nvca-voting-agreement',
+  outputPath: '/tmp/output.docx',
+  values: { /* ... */ },
+  keepIntermediate: true
+});
+
+// Inspect intermediate stages
+console.log('Clean stage:', result.stages.clean);
+console.log('Patch stage:', result.stages.patch);
+console.log('Final output:', result.stages.fill);
+```
+
+### With Custom Source Document
+
+```typescript
+const result = await runRecipe({
+  recipeId: 'nvca-voting-agreement',
+  inputPath: '/path/to/custom-source.docx',  // Use specific version
+  outputPath: '/tmp/output.docx',
+  values: { /* ... */ }
+});
+```
+
+### With Computed Fields
+
+```typescript
+const result = await runRecipe({
+  recipeId: 'nvca-stock-purchase-agreement',
+  outputPath: '/tmp/spa.docx',
+  computedOutPath: '/tmp/computed.json',  // Save computation trace
+  values: {
+    state: 'delaware',
+    purchase_price: '5000000'
+    // Computed fields like state_upper derived automatically
+  }
+});
+
+if (result.computedArtifact) {
+  console.log('Derived values:', result.computedArtifact.derived_fill_values);
+  console.log('Stabilized in', result.computedArtifact.pass_count, 'passes');
+}
+```
+
+### Error Handling
+
+```typescript
+import { runRecipe } from '@openagreements/core';
+import { ZodError } from 'zod';
+
+try {
+  const result = await runRecipe({
+    recipeId: 'nvca-voting-agreement',
+    outputPath: '/tmp/output.docx',
+    values: {
+      company_name: 'Acme Corp'
+      // Missing required fields
+    }
+  });
+} catch (error) {
+  if (error instanceof ZodError) {
+    console.error('Invalid metadata:', error.errors);
+  } else if (error instanceof Error) {
+    if (error.message.includes('source_url')) {
+      console.error('Failed to download source document');
+    } else if (error.message.includes('Patcher')) {
+      console.error('Replacement failed:', error.message);
+    }
+  }
+}
+```
+
+## Pipeline Stages
+
+### 1. Clean
+
+Loads `clean.json` and applies removal rules:
+- Removes all footnotes from `word/footnotes.xml`
+- Removes paragraphs matching `removeParagraphPatterns`
+- Removes paragraph ranges matching `removeRanges`
+- Clears OOXML parts listed in `clearParts`
+
+### 2. Patch
+
+Loads `replacements.json` and transforms placeholders:
+- Parses replacement keys (simple, context-qualified, nth-occurrence)
+- Processes context keys first (table row matching)
+- Processes nth keys second (specific occurrences)
+- Processes simple keys last (all occurrences)
+- Handles cross-run replacements using char_map algorithm
+- Performs surgical replacement preserving context formatting
+
+### 3. Fill
+
+Runs the standard template engine:
+- Evaluates computed fields (if `computed.json` exists)
+- Fills all `{template_tags}` with provided or computed values
+- Applies default values for missing optional fields
+- Renders `_______` for missing required fields
+
+### 4. Verify
+
+Validates the output document:
+- All field values appear in document text (with normalization)
+- No unrendered `{template_tags}` remain
+- No leftover `[source placeholders]` remain
+- Footnotes removed (if clean config specified)
+- Drafting notes removed (if clean config specified)
+- No double dollar signs (`$$`) from currency fields
+
+If verification fails, a warning is logged but the function does not throw.
+
+## Related Functions
+
+- [cleanDocument()](/api/recipes/clean-document) - Stage 1: Clean documents
+- [patchDocument()](/api/recipes/patch-document) - Stage 2: Patch placeholders
+- [verifyOutput()](/api/validation) - Stage 4: Verify output (coming soon)
+- [ensureSourceDocx()](/api/recipes/run-recipe) - Download and cache source documents (coming soon)
+
+## See Also
+
+- [Recipe Engine Overview](/api/recipes/overview) - Understand the recipe system
+- [Recipe Metadata](/api/template-metadata) - Metadata schema reference
+- [Adding Recipes Guide](https://github.com/openagreements/openagreements/blob/main/docs/adding-recipes.md) - Create new recipes

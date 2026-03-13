@@ -1,0 +1,246 @@
+---
+title: fill
+description: Fill a template with provided values and render a DOCX file
+---
+
+The `fill` command renders a filled DOCX document from a template by replacing placeholders with your provided values.
+
+## Syntax
+
+```bash
+open-agreements fill <template> [options]
+```
+
+## Arguments
+
+<ParamField path="template" type="string" required>
+  Template name to fill. Use `open-agreements list` to see available templates.
+</ParamField>
+
+## Options
+
+<ParamField path="-o, --output" type="string" default="<template>-filled.docx">
+  Output file path for the generated DOCX file.
+</ParamField>
+
+<ParamField path="-d, --data" type="string">
+  JSON file containing field values. The file should contain a JSON object with field names as keys.
+</ParamField>
+
+<ParamField path="--set" type="string" repeatable>
+  Set a field value inline using `key=value` format. Can be used multiple times.
+</ParamField>
+
+### Memo Options
+
+Memo generation is currently supported only for employment templates.
+
+<ParamField path="--memo" type="string" default="both">
+  Generate memo artifact(s). Valid values: `json`, `markdown`, or `both`.
+</ParamField>
+
+<ParamField path="--memo-json" type="string">
+  Output path for memo JSON file. Default: `<output-base>.memo.json`
+</ParamField>
+
+<ParamField path="--memo-md" type="string">
+  Output path for memo Markdown file. Default: `<output-base>.memo.md`
+</ParamField>
+
+<ParamField path="--memo-jurisdiction" type="string">
+  Jurisdiction override used for memo warning rules.
+</ParamField>
+
+<ParamField path="--memo-baseline" type="string">
+  Baseline template ID for deterministic variance checks.
+</ParamField>
+
+## Examples
+
+### Using a JSON Data File
+
+```bash
+open-agreements fill common-paper-mutual-nda \
+  -d values.json \
+  -o my-nda.docx
+```
+
+**values.json:**
+```json
+{
+  "party_1_name": "Acme Corp",
+  "party_2_name": "Beta Inc",
+  "governing_law": "Delaware",
+  "effective_date": "2024-03-15"
+}
+```
+
+### Using Inline --set Flags
+
+```bash
+open-agreements fill common-paper-mutual-nda \
+  --set party_1_name="Acme Corp" \
+  --set party_2_name="Beta Inc" \
+  --set governing_law="Delaware" \
+  --set effective_date="2024-03-15" \
+  -o my-nda.docx
+```
+
+### Combining Data File and --set
+
+You can combine both approaches. Values from `--set` will override values from the data file:
+
+```bash
+open-agreements fill common-paper-mutual-nda \
+  -d base-values.json \
+  --set party_2_name="Different Company" \
+  -o my-nda.docx
+```
+
+### With Memo Generation (Employment Templates)
+
+```bash
+open-agreements fill bonterms-employment-offer-us-exempt \
+  -d employee-data.json \
+  --memo both \
+  --memo-jurisdiction "California" \
+  -o offer-letter.docx
+```
+
+## Output
+
+Successful fill operations display:
+
+```
+Filled <Template Name>
+Output: /path/to/output.docx
+Fields used: field1, field2, field3
+```
+
+With memo generation:
+
+```
+Filled <Template Name>
+Output: /path/to/output.docx
+Fields used: field1, field2, field3
+Memo JSON: /path/to/output.memo.json
+Memo Markdown: /path/to/output.memo.md
+```
+
+## Template Types
+
+The `fill` command works with three types of templates:
+
+### 1. Internal Templates
+
+Standard templates bundled with the package (NDAs, cloud terms, employment forms, etc.):
+
+```bash
+open-agreements fill common-paper-mutual-nda -d values.json
+```
+
+### 2. External Templates
+
+Templates from external sources (e.g., Y Combinator SAFEs):
+
+```bash
+open-agreements fill yc-safe-cap -d values.json
+```
+
+### 3. Recipes
+
+Complex documents requiring multi-stage processing (e.g., NVCA forms):
+
+```bash
+open-agreements fill nvca-term-sheet -d values.json
+```
+
+<Note>
+  Recipes automatically download source documents on first use and run through clean → patch → fill → verify stages.
+</Note>
+
+## Validation
+
+The command validates:
+
+1. **Template exists** - Searches templates/, external/, and recipes/ directories
+2. **Required fields** - Ensures all required fields are provided
+3. **allow_derivatives** - Checks that templates allow filling (templates with `allow_derivatives: false` cannot be filled)
+
+## Error Handling
+
+<AccordionGroup>
+  <Accordion title="Template Not Found">
+    ```
+    Agreement "template-name" not found in templates, external, or recipes.
+    Available: template1, template2, template3
+    ```
+    
+    **Solution**: Use `open-agreements list` to see available templates.
+  </Accordion>
+
+  <Accordion title="Missing Required Fields">
+    ```
+    Error: Missing required fields: field1, field2
+    ```
+    
+    **Solution**: Provide all required fields via `--data` or `--set` flags. Use `open-agreements list --json` to see required fields for each template.
+  </Accordion>
+
+  <Accordion title="Template Not Fillable">
+    ```
+    Error: Template "template-name" has allow_derivatives=false and cannot be filled from templates/.
+    ```
+    
+    **Solution**: This template does not allow derivative works. Choose a different template.
+  </Accordion>
+
+  <Accordion title="Invalid --set Format">
+    ```
+    Error: Invalid --set format: "invalid" (expected key=value)
+    ```
+    
+    **Solution**: Use format `--set key=value`. Ensure there's an `=` sign between key and value.
+  </Accordion>
+
+  <Accordion title="Memo on Non-Employment Template">
+    ```
+    Error: Memo generation is currently supported only for employment templates. Received template "common-paper-mutual-nda".
+    ```
+    
+    **Solution**: Remove memo flags or use an employment template.
+  </Accordion>
+</AccordionGroup>
+
+## Field Discovery
+
+To discover available fields for a template:
+
+```bash
+# JSON output with field definitions
+open-agreements list --json | jq '.items[] | select(.name=="common-paper-mutual-nda") | .fields'
+```
+
+Output includes:
+- Field names
+- Required vs optional
+- Field descriptions
+
+## Best Practices
+
+<Tip>
+  Store field values in JSON files rather than using `--set` for complex templates. This makes it easier to:
+  - Track changes with version control
+  - Reuse values across multiple fills
+  - Review values before generating documents
+</Tip>
+
+<Warning>
+  Always review generated documents before signing or distribution. Automated filling does not constitute legal review.
+</Warning>
+
+## See Also
+
+- [list](/cli/list) - Discover available templates and their fields
+- [validate](/cli/validate) - Validate template structure
+- [recipe](/cli/recipe) - Work with recipe-based templates

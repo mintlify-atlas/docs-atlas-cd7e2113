@@ -1,0 +1,540 @@
+---
+title: 'importChecklistFromDocx()'
+description: 'Parse human edits from rendered checklist DOCX and generate patch operations'
+---
+
+## Overview
+
+The `importChecklistFromDocx()` function enables a round-trip editing workflow:
+
+1. Export checklist to DOCX using `buildChecklistTemplateContext()`
+2. Humans edit the DOCX in Microsoft Word
+3. Import the edited DOCX to generate a patch envelope
+4. Validate and apply the patch
+
+**Location**: `src/core/checklist/docx-import.ts:649`
+
+## Function Signature
+
+```typescript
+function importChecklistFromDocx(
+  options: DocxImportOptions
+): DocxImportOutcome
+```
+
+<ParamField path="options" type="DocxImportOptions" required>
+  Import configuration including DOCX buffer and canonical checklist
+</ParamField>
+
+### DocxImportOptions
+
+```typescript
+interface DocxImportOptions {
+  docxBuffer: Buffer;
+  canonicalChecklist: ClosingChecklist;
+  checklistId: string;
+  currentRevision: number;
+}
+```
+
+<ParamField path="docxBuffer" type="Buffer" required>
+  The edited DOCX file as a Buffer
+</ParamField>
+
+<ParamField path="canonicalChecklist" type="ClosingChecklist" required>
+  The original checklist that was rendered to DOCX (source of truth for comparison)
+</ParamField>
+
+<ParamField path="checklistId" type="string" required>
+  Unique identifier for the checklist
+</ParamField>
+
+<ParamField path="currentRevision" type="number" required>
+  Current revision number of the checklist
+</ParamField>
+
+## Return Types
+
+### DocxImportResult (Success)
+
+```typescript
+interface DocxImportResult {
+  ok: true;
+  patch: ChecklistPatchEnvelope | null;
+  warnings: DocxImportWarning[];
+  summary: DocxImportSummary;
+}
+```
+
+<ResponseField name="ok" type="true">
+  Indicates successful import
+</ResponseField>
+
+<ResponseField name="patch" type="ChecklistPatchEnvelope | null">
+  Generated patch envelope (null if no changes detected)
+</ResponseField>
+
+<ResponseField name="warnings" type="DocxImportWarning[]">
+  Non-fatal issues detected during import (e.g., edited sub-rows, duplicate IDs)
+</ResponseField>
+
+<ResponseField name="summary" type="DocxImportSummary">
+  Summary statistics about the import
+</ResponseField>
+
+### DocxImportFailure
+
+```typescript
+interface DocxImportFailure {
+  ok: false;
+  error_code: DocxImportErrorCode;
+  message: string;
+}
+```
+
+<ResponseField name="error_code" type="DocxImportErrorCode">
+  One of: `TABLE_NOT_FOUND`, `MERGED_CELLS`, `PARSE_FAILED`, `VERSION_MISMATCH`, `ID_COLUMN_MISSING`
+</ResponseField>
+
+### DocxImportSummary
+
+```typescript
+interface DocxImportSummary {
+  documentsProcessed: number;
+  actionItemsProcessed: number;
+  issuesProcessed: number;
+  operationsGenerated: number;
+  warningsGenerated: number;
+}
+```
+
+### DocxImportWarning
+
+```typescript
+interface DocxImportWarning {
+  code: DocxImportWarningCode;
+  table: 'documents' | 'action_items' | 'issues';
+  message: string;
+  rowIndex?: number;
+  column?: string;
+}
+```
+
+<ResponseField name="code" type="DocxImportWarningCode">
+  - `SUB_ROW_CHANGED`: Read-only sub-row (citation/signatory/action/issue) was edited
+  - `ROW_REORDERED`: Row order changed (not currently supported)
+  - `UNSUPPORTED_EDIT`: Unsupported edit operation
+  - `UNKNOWN_ID`: ID not found in canonical checklist
+  - `DUPLICATE_ID`: Same ID appears multiple times in table
+  - `NEW_ROW_ADDED`: New row added (supported for action_items and issues, not documents)
+  - `DISPLAY_ROW_SKIPPED`: Display-only row with empty ID
+</ResponseField>
+
+## Supported Edits
+
+### Documents Table
+
+The documents table has 5 columns: **ID | Title | Link | Status | Responsible**
+
+<Check>
+  **Editable fields for main entries (rows with entry_id):**
+  - Title (leading NBSP indentation is stripped)
+  - Status (must match valid status label)
+  - Link (mapped to `ChecklistDocument.primary_link`)
+  - Responsible (parsed as "Entity (Individual)" format)
+</Check>
+
+<Warning>
+  **Read-only rows:**
+  - Stage headings (e.g., "I. PRE-SIGNING")
+  - Citation sub-rows ("  Ref: ...")
+  - Signatory sub-rows ("  [x] Signatory: ...")
+  - Linked action sub-rows ("  [x] Action A-1: ...")
+  - Linked issue sub-rows ("  [x] Issue I-1: ...")
+  
+  Edits to these rows generate warnings but are ignored.
+</Warning>
+
+<Warning>
+  **Unsupported operations:**
+  - Adding new document rows (empty ID) - generates warning
+  - Deleting document rows - row must be removed via API, not DOCX
+  - Reordering rows - use `sort_key` patches instead
+</Warning>
+
+### Action Items Table
+
+5 columns: **ID | Description | Status | Assigned To | Due Date**
+
+<Check>
+  **Editable fields:**
+  - Description
+  - Status
+  - Assigned To (mapped to `assigned_to.individual_name`)
+  - Due Date
+</Check>
+
+<Check>
+  **Supported operations:**
+  - Edit existing actions (rows with action_id)
+  - Add new actions (empty ID generates new action with ID like `A-{timestamp}-{index}`)
+  - Delete actions (missing rows generate remove operations)
+</Check>
+
+### Issues Table
+
+5 columns: **ID | Title | Status | Summary | Citation**
+
+<Check>
+  **Editable fields:**
+  - Title
+  - Status
+  - Summary
+  - Citation (appends new citation if changed)
+</Check>
+
+<Check>
+  **Supported operations:**
+  - Edit existing issues
+  - Add new issues (empty ID generates new issue with ID like `I-{timestamp}-{index}`)
+  - Delete issues (missing rows generate remove operations)
+</Check>
+
+## Parsing Logic
+
+### Render Version Detection
+
+The DOCX must contain the render version marker:
+```
+<!--oa:render_version=closing-checklist-->
+```
+
+This ensures the DOCX was generated by the current template version. Missing markers cause `VERSION_MISMATCH` errors.
+
+### Table Extraction
+
+The function uses the `@usejunior/docx-core` library to extract tables from the DOCX XML:
+- Tables are identified by their header row
+- Merged cells are rejected (causes `MERGED_CELLS` error)
+- Control rows (`{FOR}` / `{END-FOR}`) are filtered out
+
+### Row Classification
+
+For the documents table, rows are classified by pattern matching:
+
+```typescript
+type RowType = 'stage_heading' | 'main_entry' | 'citation' | 
+               'signatory' | 'action' | 'issue' | 'unknown';
+```
+
+- **Stage heading**: Empty ID, title matches `/^[IVX]+\.\s/`
+- **Main entry**: Non-empty ID
+- **Citation**: Empty ID, title starts with "Ref:"
+- **Signatory**: Empty ID, title matches `/\[.\] Signatory:/`
+- **Action**: Empty ID, title matches `/\[.\] Action/`
+- **Issue**: Empty ID, title matches `/\[.\] Issue/`
+
+### Responsible Party Parsing
+
+The "Responsible" column uses "Entity (Individual)" format:
+
+- `"Acme Corp (John Smith)"` → `{ organization: "Acme Corp", individual_name: "John Smith" }`
+- `"Acme Corp"` → `{ organization: "Acme Corp" }`
+- `"John Smith"` → disambiguated using canonical shape
+
+<Info>
+  If the canonical entry has both `organization` and `individual_name`, parentheses are used to split. Otherwise, the canonical shape determines which field to populate.
+</Info>
+
+<Warning>
+  The `role` field is never modified by DOCX import (not rendered in DOCX).
+</Warning>
+
+### Status Parsing
+
+Status labels are converted back to enum values using `reverseHumanStatus()`:
+
+| Display Label | Enum Value |
+|---------------|------------|
+| Not Started | `NOT_STARTED` |
+| Draft | `DRAFT` |
+| Circulated | `CIRCULATED` |
+| Form Final | `FORM_FINAL` |
+| Partially Signed | `PARTIALLY_SIGNED` |
+| Fully Executed | `FULLY_EXECUTED` |
+| Delivered | `DELIVERED` |
+| Filed or Recorded | `FILED_OR_RECORDED` |
+| In Progress | `IN_PROGRESS` |
+| Completed | `COMPLETED` |
+| On Hold | `ON_HOLD` |
+| Open | `OPEN` |
+| Closed | `CLOSED` |
+
+## Generated Patch Operations
+
+The function generates RFC 6902 patch operations for detected changes:
+
+### Document Entry Edits
+
+```typescript
+// Title change
+{
+  op: 'replace',
+  path: '/checklist_entries/E-1/title',
+  value: 'Updated Purchase Agreement',
+  rationale: 'DOCX import: title changed'
+}
+
+// Status change
+{
+  op: 'replace',
+  path: '/checklist_entries/E-1/status',
+  value: 'FULLY_EXECUTED',
+  rationale: 'DOCX import: status changed'
+}
+
+// Link change
+{
+  op: 'replace',
+  path: '/documents/DOC-1/primary_link',
+  value: 'https://new-link.example.com',
+  rationale: 'DOCX import: link changed'
+}
+
+// Responsible party change
+{
+  op: 'replace',
+  path: '/checklist_entries/E-1/responsible_party/organization',
+  value: 'New Corp',
+  rationale: 'DOCX import: organization changed'
+}
+```
+
+### Action Item Operations
+
+```typescript
+// Add new action
+{
+  op: 'add',
+  path: '/action_items/A-1710345678-5',
+  value: {
+    action_id: 'A-1710345678-5',
+    description: 'Review exhibits',
+    status: 'NOT_STARTED',
+    assigned_to: { individual_name: 'Legal Team' },
+    related_document_ids: [],
+    citations: []
+  },
+  rationale: 'DOCX import: new action item added'
+}
+
+// Remove action
+{
+  op: 'remove',
+  path: '/action_items/A-1',
+  rationale: 'DOCX import: action item removed from table'
+}
+```
+
+### Issue Operations
+
+```typescript
+// Update issue citation (appends new citation)
+{
+  op: 'add',
+  path: '/issues/I-1/citations/-',
+  value: { text: 'Updated reference' },
+  rationale: 'DOCX import: issue citation updated'
+}
+
+// Close issue
+{
+  op: 'replace',
+  path: '/issues/I-1/status',
+  value: 'CLOSED',
+  rationale: 'DOCX import: issue status changed'
+}
+```
+
+## Example Usage
+
+```typescript
+import { 
+  importChecklistFromDocx,
+  validateChecklistPatch,
+  applyChecklistPatch,
+  type ClosingChecklist
+} from 'openagreements';
+import fs from 'fs/promises';
+
+const checklist: ClosingChecklist = { /* canonical checklist */ };
+const currentRevision = 10;
+
+// Read edited DOCX
+const docxBuffer = await fs.readFile('./edited-checklist.docx');
+
+// Import
+const importResult = importChecklistFromDocx({
+  docxBuffer,
+  canonicalChecklist: checklist,
+  checklistId: 'checklist-123',
+  currentRevision
+});
+
+if (!importResult.ok) {
+  console.error('Import failed:', importResult.message);
+  return;
+}
+
+console.log('Import summary:', importResult.summary);
+console.log('Warnings:', importResult.warnings);
+
+if (!importResult.patch) {
+  console.log('No changes detected');
+  return;
+}
+
+console.log(`Generated ${importResult.patch.operations.length} operations`);
+
+// Validate the generated patch
+const validationResult = await validateChecklistPatch({
+  checklist_id: 'checklist-123',
+  checklist,
+  current_revision: currentRevision,
+  patch: importResult.patch
+});
+
+if (!validationResult.ok) {
+  console.error('Patch validation failed:', validationResult.diagnostics);
+  return;
+}
+
+// Apply the patch
+const applyResult = await applyChecklistPatch({
+  checklist_id: 'checklist-123',
+  checklist,
+  current_revision: currentRevision,
+  request: {
+    validation_id: validationResult.validation_id,
+    patch: importResult.patch
+  }
+});
+
+if (!applyResult.ok) {
+  console.error('Patch apply failed:', applyResult.message);
+  return;
+}
+
+console.log('Successfully applied DOCX edits');
+console.log('New revision:', applyResult.new_revision);
+```
+
+## Error Codes
+
+| Code | Description |
+|------|-------------|
+| `TABLE_NOT_FOUND` | No recognized checklist tables found in DOCX |
+| `MERGED_CELLS` | DOCX contains merged cells (unsafe to parse) |
+| `PARSE_FAILED` | Failed to parse DOCX XML structure |
+| `VERSION_MISMATCH` | Missing or incorrect render version marker |
+| `ID_COLUMN_MISSING` | Table header doesn't match expected format |
+
+## Warning Handling
+
+Warnings are informational and don't prevent patch generation:
+
+```typescript
+if (importResult.ok && importResult.warnings.length > 0) {
+  for (const warning of importResult.warnings) {
+    console.warn(`[${warning.code}] ${warning.table}:${warning.rowIndex} - ${warning.message}`);
+  }
+}
+```
+
+Common warnings:
+- **SUB_ROW_CHANGED**: User edited a read-only row (safely ignored)
+- **UNKNOWN_ID**: ID in DOCX not in canonical (possibly deleted after render)
+- **NEW_ROW_ADDED**: New action/issue added (generates synthetic ID)
+
+## Best Practices
+
+<Check>
+  **Do:**
+  - Always validate and apply patches immediately after import
+  - Review warnings for potential data quality issues
+  - Use the same checklist revision that was used to generate the DOCX
+  - Reject imports if `VERSION_MISMATCH` occurs (DOCX too old)
+</Check>
+
+<Warning>
+  **Don't:**
+  - Merge cells in the DOCX (causes hard errors)
+  - Edit stage headings or sub-rows (generates warnings)
+  - Change row order (not detected by parser)
+  - Import DOCXs generated from different checklist versions
+</Warning>
+
+## Round-Trip Workflow
+
+```typescript
+// 1. Export checklist to DOCX
+import { buildChecklistTemplateContext, fillTemplate } from 'openagreements';
+
+const context = buildChecklistTemplateContext(checklist);
+const docxResult = await fillTemplate({
+  templatePath: './templates/closing-checklist.docx',
+  data: context,
+  outputPath: './exports/checklist-rev10.docx'
+});
+
+// 2. User edits DOCX in Microsoft Word
+// ...
+
+// 3. Import edited DOCX
+const editedBuffer = await fs.readFile('./exports/checklist-rev10-edited.docx');
+const importResult = importChecklistFromDocx({
+  docxBuffer: editedBuffer,
+  canonicalChecklist: checklist,
+  checklistId: 'checklist-123',
+  currentRevision: 10
+});
+
+// 4. Validate and apply
+if (importResult.ok && importResult.patch) {
+  const validation = await validateChecklistPatch({
+    checklist_id: 'checklist-123',
+    checklist,
+    current_revision: 10,
+    patch: importResult.patch
+  });
+
+  if (validation.ok) {
+    const apply = await applyChecklistPatch({
+      checklist_id: 'checklist-123',
+      checklist,
+      current_revision: 10,
+      request: {
+        validation_id: validation.validation_id,
+        patch: importResult.patch
+      }
+    });
+
+    if (apply.ok) {
+      // Save apply.checklist (rev 11) to database
+      await saveChecklist(apply.checklist, apply.new_revision);
+    }
+  }
+}
+```
+
+## Related Functions
+
+- **buildChecklistTemplateContext()** - Export checklist to template format
+- **validateChecklistPatch()** - Validate generated patches
+- **applyChecklistPatch()** - Apply patches to checklist
+- **reverseHumanStatus()** - Parse status labels to enum values
+- **classifyRow()** - Classify document table rows
+
+<Card title="Patch Operations" icon="code-merge" href="/api/checklist/patch-operations">
+  Learn more about the patch validation and apply system
+</Card>

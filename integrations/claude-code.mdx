@@ -1,0 +1,253 @@
+---
+title: Using with Claude Code
+description: Install OpenAgreements as a Claude Code plugin or agent skill
+---
+
+OpenAgreements works with [Claude Code](https://docs.anthropic.com/en/docs/claude-code) as both a plugin and an [Agent Skill](https://agentskills.io). No pre-installation required — Claude downloads and runs the CLI on demand via `npx`.
+
+## Installation Options
+
+<Tabs>
+  <Tab title="Agent Skill (Recommended)">
+    ### Install the Agent Skill
+
+    ```bash
+    npx skills add open-agreements/open-agreements
+    ```
+
+    Then ask Claude to draft an agreement:
+
+    ```
+    > Draft an NDA between Acme Corp and Beta Inc
+    ```
+
+    Claude will:
+    1. Discover available NDA templates
+    2. Interview you for required field values
+    3. Render a signed-ready DOCX file
+
+    <Check>
+      The skill works with any agent that supports the Agent Skills specification.
+    </Check>
+  </Tab>
+  <Tab title="Plugin">
+    ### Claude Plugin Configuration
+
+    Create a `.claude-plugin/plugin.json` in your repository:
+
+    ```json
+    {
+      "name": "open-agreements",
+      "version": "0.1.0",
+      "description": "Fill standard legal agreement templates and produce signable DOCX files. Supports Common Paper and Bonterms templates.",
+      "author": {
+        "name": "Open Agreements",
+        "email": "steven@usejunior.com"
+      },
+      "license": "MIT"
+    }
+    ```
+
+    <Note>
+      The plugin manifest is minimal. Claude discovers functionality via `npx open-agreements` commands.
+    </Note>
+  </Tab>
+  <Tab title="Direct (No Install)">
+    ### Zero-Install Mode
+
+    If you have Node.js >= 20, just ask Claude:
+
+    ```
+    > Fill the Common Paper mutual NDA for my company
+    ```
+
+    Claude runs:
+    - `npx -y open-agreements@latest list --json` to discover templates
+    - `npx -y open-agreements@latest fill <template>` to render output
+
+    No installation required.
+  </Tab>
+</Tabs>
+
+## How It Works
+
+<Steps>
+  <Step title="Template Discovery">
+    Claude runs `open-agreements list --json` to fetch available templates and their field definitions.
+  </Step>
+  <Step title="Interactive Interview">
+    Claude asks you for field values grouped by section (up to 4 questions per round).
+  </Step>
+  <Step title="DOCX Generation">
+    Claude runs `open-agreements fill <template> -d values.json -o output.docx` to render the document.
+  </Step>
+  <Step title="Review and Sign">
+    You receive a professionally formatted DOCX preserving all original formatting.
+  </Step>
+</Steps>
+
+## Example Workflow
+
+```bash
+# Claude discovers templates
+npx -y open-agreements@latest list --json
+
+# Claude collects your answers into values.json:
+{
+  "party_1_name": "Acme Corp",
+  "party_2_name": "Beta Inc",
+  "effective_date": "February 1, 2026",
+  "purpose": "Evaluating a potential business partnership",
+  "governing_law": "Delaware"
+}
+
+# Claude generates the DOCX
+npx -y open-agreements@latest fill common-paper-mutual-nda \
+  -d values.json \
+  -o acme-beta-nda.docx
+```
+
+## MCP Server Integration
+
+For local MCP workflows, configure Claude Code with stdio MCP servers:
+
+<CodeGroup>
+```json mcp.json
+{
+  "mcpServers": {
+    "open-agreements": {
+      "url": "https://openagreements.ai/api/mcp"
+    },
+    "contract-templates-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@open-agreements/contract-templates-mcp"]
+    },
+    "contracts-workspace-mcp": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@open-agreements/contracts-workspace-mcp"]
+    }
+  }
+}
+```
+</CodeGroup>
+
+### Available MCP Tools
+
+#### Template Drafting (`contract-templates-mcp`)
+
+- `list_templates` — Discover available templates
+- `get_template` — Fetch single template with field metadata
+- `fill_template` — Render DOCX with provided values
+
+#### Workspace Management (`contracts-workspace-mcp`)
+
+- `workspace_init` — Preview workspace structure suggestions
+- `catalog_validate` — Validate forms catalog schema
+- `catalog_fetch` — Download redistributable catalog entries
+- `status_generate` — Generate contracts-index.yaml
+- `status_lint` — Lint workspace structure and naming
+
+<Tip>
+  The remote MCP server (`https://openagreements.ai/api/mcp`) provides template tools without local dependencies. The stdio servers run fully local.
+</Tip>
+
+## Cursor Plugin Configuration
+
+For Cursor users, OpenAgreements includes a Cursor plugin manifest:
+
+<CodeGroup>
+```json .cursor-plugin/plugin.json
+{
+  "name": "open-agreements",
+  "displayName": "OpenAgreements",
+  "description": "Open-source legal template automation for DOCX with MCP tooling.",
+  "version": "0.4.0",
+  "author": {
+    "name": "Open Agreements",
+    "email": "steven@usejunior.com"
+  },
+  "publisher": "Open Agreements",
+  "homepage": "https://github.com/open-agreements/open-agreements#readme",
+  "repository": "https://github.com/open-agreements/open-agreements",
+  "license": "MIT",
+  "keywords": ["cursor", "mcp", "legal", "docx", "contracts", "nda"],
+  "category": "Developer Tools",
+  "skills": "skills/**/SKILL.md",
+  "mcpServers": "mcp.json"
+}
+```
+</CodeGroup>
+
+<Note>
+  To publish in Cursor Marketplace, submit at [cursor.com/marketplace/publish](https://cursor.com/marketplace/publish)
+</Note>
+
+## Trust and Security
+
+### Execution Modes
+
+<Tabs>
+  <Tab title="Remote MCP">
+    - Claude uses hosted MCP connector at `https://openagreements.ai/api/mcp`
+    - Zero local dependencies
+    - Server handles DOCX generation
+    - Best for non-sensitive documents
+  </Tab>
+  <Tab title="Local CLI">
+    - Claude runs `npx open-agreements` locally
+    - No network calls during filling
+    - DOCX generated on your machine
+    - Best for sensitive documents
+  </Tab>
+  <Tab title="Local MCP">
+    - Stdio MCP servers run locally
+    - No hosted endpoints
+    - Full control over data flow
+    - Best for internal policy compliance
+  </Tab>
+</Tabs>
+
+<Warning>
+  Choose your execution mode based on document sensitivity. See the [trust checklist](https://github.com/open-agreements/open-agreements/blob/main/docs/trust-checklist.md) for a 60-second data-flow summary.
+</Warning>
+
+## Category-Specific Skills
+
+OpenAgreements includes specialized skills for targeted workflows:
+
+- `nda` — NDAs and confidentiality agreements
+- `services-agreement` — Professional services, consulting
+- `cloud-service-agreement` — SaaS, cloud, software licenses
+- `employment-contract` — Offer letters, IP assignments
+- `safe` — Y Combinator SAFEs for startup fundraising
+- `venture-financing` — NVCA model documents
+- `data-privacy-agreement` — DPAs, BAAs, AI addendums
+
+Install a category-specific skill:
+
+```bash
+npx skills add open-agreements/open-agreements --skill nda
+```
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="List Templates" icon="list">
+    ```bash
+    open-agreements list
+    ```
+  </Card>
+  <Card title="Fill a Template" icon="file-pen">
+    ```bash
+    open-agreements fill common-paper-mutual-nda
+    ```
+  </Card>
+  <Card title="MCP Servers" icon="server" href="/integrations/mcp-servers">
+    Set up local or remote MCP servers
+  </Card>
+  <Card title="Workspace Management" icon="folder" href="/integrations/workspace-management">
+    Organize contract repositories
+  </Card>
+</CardGroup>

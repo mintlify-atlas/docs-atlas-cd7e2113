@@ -1,0 +1,298 @@
+---
+title: Using with Gemini
+description: Install OpenAgreements as a Gemini CLI extension with MCP support
+---
+
+OpenAgreements works with the Gemini CLI as an extension, providing MCP tools, context files, and skills for contract template discovery and filling.
+
+## Installation
+
+<Steps>
+  <Step title="Install the Extension">
+    ```bash
+    gemini extensions install https://github.com/open-agreements/open-agreements
+    ```
+  </Step>
+  <Step title="Ask Gemini to Draft an Agreement">
+    ```
+    > Draft a mutual NDA for Acme Corp and Beta Inc
+    ```
+    Gemini will use the MCP tools to discover templates, interview you for field values, and render a DOCX.
+  </Step>
+</Steps>
+
+## Extension Configuration
+
+The extension is defined in `gemini-extension.json`:
+
+<CodeGroup>
+```json gemini-extension.json
+{
+  "name": "open-agreements",
+  "version": "0.4.0",
+  "description": "Local MCP extension for OpenAgreements workspace organization and contract template drafting.",
+  "contextFileName": "GEMINI.md",
+  "entrypoint": "GEMINI.md",
+  "mcpServers": {
+    "contracts-workspace-mcp": {
+      "command": "npx",
+      "args": ["-y", "@open-agreements/contracts-workspace-mcp"]
+    },
+    "contract-templates-mcp": {
+      "command": "npx",
+      "args": ["-y", "@open-agreements/contract-templates-mcp"]
+    },
+    "checklist-mcp": {
+      "command": "npx",
+      "args": ["-y", "@open-agreements/checklist-mcp"]
+    }
+  }
+}
+```
+</CodeGroup>
+
+<Note>
+  The extension uses three local stdio MCP servers that run via `npx`. No remote endpoints required.
+</Note>
+
+## MCP Servers
+
+The Gemini extension provides three MCP servers:
+
+### 1. Contract Templates MCP
+
+Package: `@open-agreements/contract-templates-mcp`
+
+**Tools:**
+- `list_templates` — List available templates with compact or full metadata
+- `get_template` — Fetch a single template definition with field metadata
+- `fill_template` — Fill a template and return local path or inline base64
+
+**Usage Example:**
+
+```typescript
+// List all templates
+list_templates({ mode: "full" })
+
+// Get a specific template
+get_template({ template_id: "common-paper-mutual-nda" })
+
+// Fill a template
+fill_template({
+  template: "common-paper-mutual-nda",
+  values: {
+    party_1_name: "Acme Corp",
+    party_2_name: "Beta Inc",
+    effective_date: "February 1, 2026",
+    purpose: "Evaluating a potential business partnership"
+  },
+  return_mode: "local_path"
+})
+```
+
+### 2. Contracts Workspace MCP
+
+Package: `@open-agreements/contracts-workspace-mcp`
+
+**Tools:**
+- `workspace_init` — Preview topic-first workspace setup (suggest-only, no auto-create)
+- `catalog_validate` — Validate forms-catalog.yaml schema and entry integrity
+- `catalog_fetch` — Download redistributable catalog entries with SHA-256 verification
+- `status_generate` — Generate contracts-index.yaml with timestamped summary
+- `status_lint` — Lint workspace structure and naming conventions
+
+**Usage Example:**
+
+```typescript
+// Preview workspace structure
+workspace_init({
+  root_dir: "/path/to/workspace",
+  agents: ["claude", "gemini"],
+  topics: ["employment", "vendor", "customer"]
+})
+
+// Generate status index
+status_generate({ root_dir: "/path/to/workspace" })
+
+// Lint workspace
+status_lint({ root_dir: "/path/to/workspace" })
+```
+
+### 3. Checklist MCP
+
+Package: `@open-agreements/checklist-mcp`
+
+Provides compliance and checklist management tools (configuration details TBD).
+
+## Context File (GEMINI.md)
+
+The extension includes a context file that guides Gemini on how to use the MCP servers:
+
+<CodeGroup>
+```markdown GEMINI.md
+# OpenAgreements — Local MCP Extension Context
+
+This extension is for local OpenAgreements workflows using two MCP servers:
+
+1. `contracts-workspace-mcp` (`@open-agreements/contracts-workspace-mcp`)
+- Workspace setup planning (`workspace_init`)
+- Catalog validation/fetch (`catalog_validate`, `catalog_fetch`)
+- Status generation and lint (`status_generate`, `status_lint`)
+
+2. `contract-templates-mcp` (`@open-agreements/contract-templates-mcp`)
+- Template discovery (`list_templates`)
+- Template inspection (`get_template`)
+- Template drafting/fill output (`fill_template`)
+
+## Trust Boundary
+
+Both MCP servers run locally via stdio and operate on local filesystem paths.
+No hosted MCP endpoint is required for extension operation.
+
+## Recommended Flow
+
+1. Use `workspace_init` to plan folder structure and collaboration files.
+2. Use `list_templates` / `get_template` to pick and inspect the contract template.
+3. Use `fill_template` to render a local DOCX output.
+4. Use workspace status tools to track draft/executed lifecycle state.
+```
+</CodeGroup>
+
+## Trust Boundary
+
+<Check>
+  Both MCP servers run locally via stdio and operate on local filesystem paths. No hosted MCP endpoint is required.
+</Check>
+
+### Local Execution Benefits
+
+- No network calls during template filling
+- Full control over data flow
+- DOCX generation happens on your machine
+- Works with locally synced cloud folders (e.g., Google Drive)
+
+## Recommended Workflow
+
+<Steps>
+  <Step title="Plan Workspace Structure">
+    Use `workspace_init` to preview suggested folders and files:
+    ```typescript
+    workspace_init({
+      root_dir: "/Users/you/contracts",
+      agents: ["gemini"],
+      topics: ["employment", "vendor", "customer"]
+    })
+    ```
+  </Step>
+  <Step title="Discover Templates">
+    Use `list_templates` to see available templates:
+    ```typescript
+    list_templates({ mode: "compact" })
+    ```
+  </Step>
+  <Step title="Inspect Template Fields">
+    Use `get_template` to see required fields:
+    ```typescript
+    get_template({ template_id: "common-paper-mutual-nda" })
+    ```
+  </Step>
+  <Step title="Fill Template">
+    Use `fill_template` to generate a DOCX:
+    ```typescript
+    fill_template({
+      template: "common-paper-mutual-nda",
+      values: { /* your field values */ },
+      output_path: "/Users/you/contracts/draft/acme-nda.docx",
+      return_mode: "local_path"
+    })
+    ```
+  </Step>
+  <Step title="Track Status">
+    Use `status_generate` to index the workspace:
+    ```typescript
+    status_generate({ root_dir: "/Users/you/contracts" })
+    ```
+  </Step>
+</Steps>
+
+## Building MCP Servers Locally
+
+If you're developing or testing the extension:
+
+<Tabs>
+  <Tab title="Contract Templates MCP">
+    ```bash
+    npm run build:contract-templates-mcp
+    node packages/contract-templates-mcp/bin/open-agreements-contract-templates-mcp.js
+    ```
+  </Tab>
+  <Tab title="Contracts Workspace MCP">
+    ```bash
+    npm run build:workspace-mcp
+    node packages/contracts-workspace-mcp/bin/open-agreements-workspace-mcp.js
+    ```
+  </Tab>
+</Tabs>
+
+## Extension Gate Testing
+
+Before releasing a new version:
+
+<Steps>
+  <Step title="Copy Extension to Gemini Directory">
+    ```bash
+    cp -r . ~/.gemini/extensions/open-agreements
+    # Or create a symlink for development:
+    ln -s /path/to/open-agreements ~/.gemini/extensions/open-agreements
+    ```
+  </Step>
+  <Step title="Verify MCP Servers Start">
+    ```bash
+    # Test contract-templates-mcp
+    npx -y @open-agreements/contract-templates-mcp
+    
+    # Test contracts-workspace-mcp
+    npx -y @open-agreements/contracts-workspace-mcp
+    ```
+  </Step>
+  <Step title="Test with Gemini CLI">
+    Ask Gemini to list templates or initialize a workspace to verify the extension works end-to-end.
+  </Step>
+</Steps>
+
+## Template Categories
+
+41 templates available across 9 categories:
+
+<Accordion title="View All Categories">
+  - **NDAs and confidentiality** (3 templates) — Common Paper, Bonterms
+  - **Professional services** (4 templates) — Consulting, contractor agreements
+  - **Cloud/SaaS agreements** (10 templates) — Service terms, licenses
+  - **Employment** (3 templates) — Offer letters, IP assignments
+  - **Y Combinator SAFEs** (4 templates) — Valuation cap, discount, MFN
+  - **NVCA venture financing** (7 templates) — Term sheets, stock purchase agreements
+  - **Data privacy** (4 templates) — DPAs, BAAs, AI addendums
+  - **Deal administration** (5 templates)
+  - **Amendments** (1 template)
+</Accordion>
+
+<Tip>
+  All templates preserve original DOCX formatting. Templates are licensed by their respective authors (CC BY 4.0, CC0 1.0, or CC BY-ND 4.0).
+</Tip>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="MCP Servers" icon="server" href="/integrations/mcp-servers">
+    Deep dive into MCP server tools and parameters
+  </Card>
+  <Card title="Workspace Management" icon="folder" href="/integrations/workspace-management">
+    Learn about workspace structure and status tracking
+  </Card>
+  <Card title="Claude Code" icon="code" href="/integrations/claude-code">
+    Use with Claude Code instead
+  </Card>
+  <Card title="Templates" icon="file-contract" href="/templates">
+    Browse available templates
+  </Card>
+</CardGroup>

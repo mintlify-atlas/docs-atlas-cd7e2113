@@ -1,0 +1,131 @@
+---
+title: CLI Overview
+description: Command-line interface reference for OpenAgreements
+---
+
+The OpenAgreements CLI provides commands for filling legal agreement templates, validating documents, managing recipes, and working with closing checklists.
+
+## Installation
+
+```bash
+# Global installation
+npm install -g open-agreements
+
+# Or use with npx (no installation)
+npx open-agreements@latest <command>
+```
+
+## Available Commands
+
+<CardGroup cols={2}>
+  <Card title="fill" icon="file-pen" href="/cli/fill">
+    Fill a template with provided values and render a DOCX file
+  </Card>
+  <Card title="list" icon="list" href="/cli/list">
+    Show all available agreements (templates, external, and recipes)
+  </Card>
+  <Card title="validate" icon="check-circle" href="/cli/validate">
+    Run validation pipeline on templates and recipes
+  </Card>
+  <Card title="recipe" icon="wand-magic-sparkles" href="/cli/recipe">
+    Work with recipe-based document pipelines
+  </Card>
+  <Card title="scan" icon="magnifying-glass" href="/cli/scan">
+    Scan a DOCX file for bracketed placeholders
+  </Card>
+  <Card title="checklist" icon="square-check" href="/cli/checklist">
+    Work with closing checklists
+  </Card>
+</CardGroup>
+
+## Quick Start
+
+### List Available Templates
+
+```bash
+open-agreements list
+```
+
+### Fill a Template
+
+```bash
+# Using a JSON data file
+open-agreements fill common-paper-mutual-nda -d values.json -o nda.docx
+
+# Using inline values
+open-agreements fill common-paper-mutual-nda \
+  --set party_1_name="Acme Corp" \
+  --set party_2_name="Beta Inc" \
+  --set governing_law="Delaware"
+```
+
+### Validate Templates
+
+```bash
+# Validate all templates
+open-agreements validate
+
+# Validate specific template
+open-agreements validate common-paper-mutual-nda
+```
+
+## Command Syntax
+
+All commands follow this general pattern:
+
+```bash
+open-agreements <command> [arguments] [options]
+```
+
+## Global Options
+
+<ParamField path="--version" type="flag">
+  Display the CLI version number
+</ParamField>
+
+<ParamField path="--help" type="flag">
+  Display help information for any command
+</ParamField>
+
+## Getting Help
+
+Get help for any command:
+
+```bash
+# General help
+open-agreements --help
+
+# Command-specific help
+open-agreements fill --help
+open-agreements recipe --help
+```
+
+## Output Formats
+
+Most commands produce DOCX files or console output. The `list` command supports JSON output for programmatic use:
+
+```bash
+open-agreements list --json
+```
+
+## Environment Variables
+
+<ParamField path="OPEN_AGREEMENTS_CONTENT_ROOTS" type="string">
+  Path-delimited list of additional content directories to search for templates, external sources, and recipes. Format: `dirA:dirB` on macOS/Linux.
+</ParamField>
+
+## Exit Codes
+
+- `0` - Success
+- `1` - Error (validation failure, template not found, missing required fields, etc.)
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Fill Command" icon="file-pen" href="/cli/fill">
+    Learn how to fill templates with data
+  </Card>
+  <Card title="Recipe Command" icon="wand-magic-sparkles" href="/cli/recipe">
+    Work with complex document pipelines
+  </Card>
+</CardGroup>

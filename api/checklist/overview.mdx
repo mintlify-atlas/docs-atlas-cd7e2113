@@ -1,0 +1,331 @@
+---
+title: 'Checklist API Overview'
+description: 'Manage closing checklists with document tracking, action items, and patch operations'
+---
+
+## Introduction
+
+The OpenAgreements Checklist API provides a comprehensive system for managing closing checklists in legal transactions. It supports document tracking across multiple stages, action items, issue management, and a sophisticated patch-based update system.
+
+## Core Concepts
+
+### Closing Checklist Structure
+
+A closing checklist organizes documents, action items, and issues for a legal transaction. The main components are:
+
+- **Documents**: Legal documents tracked through the closing process
+- **Checklist Entries**: Hierarchical entries representing documents with stage, status, and responsibility tracking
+- **Action Items**: Tasks associated with documents
+- **Issues**: Problems or questions that need resolution
+
+### Checklist Stages
+
+Every checklist entry belongs to one of four stages:
+
+<ParamField path="stage" type="enum">
+  - `PRE_SIGNING` - Documents being prepared before signing
+  - `SIGNING` - Documents in the signature collection phase
+  - `CLOSING` - Documents being finalized at closing
+  - `POST_CLOSING` - Post-closing deliverables and filings
+</ParamField>
+
+### Entry Status Workflow
+
+Checklist entries progress through these statuses:
+
+<ResponseField name="status" type="enum">
+  - `NOT_STARTED` - Entry not yet started
+  - `DRAFT` - Document is in draft form
+  - `CIRCULATED` - Document circulated for review
+  - `FORM_FINAL` - Form is finalized, awaiting signatures
+  - `PARTIALLY_SIGNED` - Some but not all signatures received
+  - `FULLY_EXECUTED` - All signatures received
+  - `DELIVERED` - Document delivered to relevant parties
+  - `FILED_OR_RECORDED` - Document filed with authorities
+</ResponseField>
+
+## Main Data Schema
+
+### ClosingChecklist
+
+The root schema for a closing checklist:
+
+```typescript
+interface ClosingChecklist {
+  deal_name: string;
+  updated_at: string;
+  documents: Record<string, ChecklistDocument>;
+  checklist_entries: Record<string, ChecklistEntry>;
+  action_items: Record<string, ActionItem>;
+  issues: Record<string, Issue>;
+}
+```
+
+<ParamField path="deal_name" type="string" required>
+  Name of the deal or transaction
+</ParamField>
+
+<ParamField path="updated_at" type="string" required>
+  ISO 8601 timestamp of last update
+</ParamField>
+
+<ParamField path="documents" type="Record<string, ChecklistDocument>" default="{}">
+  Dictionary of documents keyed by `document_id`
+</ParamField>
+
+<ParamField path="checklist_entries" type="Record<string, ChecklistEntry>" default="{}">
+  Dictionary of checklist entries keyed by `entry_id`. Entries form a hierarchical tree within each stage.
+</ParamField>
+
+<ParamField path="action_items" type="Record<string, ActionItem>" default="{}">
+  Dictionary of action items keyed by `action_id`
+</ParamField>
+
+<ParamField path="issues" type="Record<string, Issue>" default="{}">
+  Dictionary of issues keyed by `issue_id`
+</ParamField>
+
+### ChecklistDocument
+
+```typescript
+interface ChecklistDocument {
+  document_id: string;
+  title: string;
+  primary_link?: string;
+  labels?: string[];
+}
+```
+
+<ParamField path="document_id" type="string" required>
+  Unique identifier for the document
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Document title
+</ParamField>
+
+<ParamField path="primary_link" type="string">
+  URL or reference to the document
+</ParamField>
+
+<ParamField path="labels" type="string[]" default="[]">
+  Tags or labels for categorizing the document
+</ParamField>
+
+### ChecklistEntry
+
+```typescript
+interface ChecklistEntry {
+  entry_id: string;
+  document_id?: string;
+  stage: ChecklistStage;
+  sort_key?: string;
+  title: string;
+  status: ChecklistEntryStatus;
+  parent_entry_id?: string;
+  responsible_party?: Responsibility;
+  citations: Citation[];
+  signatories: Signatory[];
+}
+```
+
+<ParamField path="entry_id" type="string" required>
+  Unique identifier for the entry
+</ParamField>
+
+<ParamField path="document_id" type="string">
+  Reference to a document in the `documents` collection. One document can have at most one checklist entry.
+</ParamField>
+
+<ParamField path="stage" type="ChecklistStage" required>
+  The closing stage this entry belongs to
+</ParamField>
+
+<ParamField path="sort_key" type="string">
+  Sorting key for ordering entries within a stage (auto-assigned if not provided)
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Entry title or description
+</ParamField>
+
+<ParamField path="status" type="ChecklistEntryStatus" required>
+  Current status of the entry
+</ParamField>
+
+<ParamField path="parent_entry_id" type="string">
+  Reference to a parent entry for hierarchical organization. Parent must be in the same stage.
+</ParamField>
+
+<ParamField path="responsible_party" type="Responsibility">
+  Party responsible for this entry
+</ParamField>
+
+<ParamField path="citations" type="Citation[]" default="[]">
+  References to source documents or sections
+</ParamField>
+
+<ParamField path="signatories" type="Signatory[]" default="[]">
+  List of parties who must sign this document
+</ParamField>
+
+### ActionItem
+
+```typescript
+interface ActionItem {
+  action_id: string;
+  description: string;
+  status: ChecklistItemStatus;
+  assigned_to?: Responsibility;
+  due_date?: string;
+  related_document_ids: string[];
+  citations: Citation[];
+}
+```
+
+<ParamField path="action_id" type="string" required>
+  Unique identifier for the action item
+</ParamField>
+
+<ParamField path="description" type="string" required>
+  Description of the action to be taken
+</ParamField>
+
+<ParamField path="status" type="enum" required>
+  One of: `NOT_STARTED`, `IN_PROGRESS`, `COMPLETED`, `ON_HOLD`
+</ParamField>
+
+<ParamField path="assigned_to" type="Responsibility">
+  Person or organization responsible for completing the action
+</ParamField>
+
+<ParamField path="due_date" type="string">
+  Due date (free-form string)
+</ParamField>
+
+<ParamField path="related_document_ids" type="string[]" default="[]">
+  Documents this action relates to
+</ParamField>
+
+### Issue
+
+```typescript
+interface Issue {
+  issue_id: string;
+  title: string;
+  summary?: string;
+  status: IssueStatus;
+  related_document_ids: string[];
+  citations: Citation[];
+}
+```
+
+<ParamField path="issue_id" type="string" required>
+  Unique identifier for the issue
+</ParamField>
+
+<ParamField path="title" type="string" required>
+  Issue title
+</ParamField>
+
+<ParamField path="summary" type="string">
+  Detailed description of the issue
+</ParamField>
+
+<ParamField path="status" type="enum" required>
+  One of: `OPEN`, `CLOSED`
+</ParamField>
+
+<ParamField path="related_document_ids" type="string[]" default="[]">
+  Documents this issue relates to
+</ParamField>
+
+### Supporting Types
+
+#### Responsibility
+
+```typescript
+interface Responsibility {
+  organization?: string;
+  individual_name?: string;
+  role?: string;
+}
+```
+
+#### Citation
+
+```typescript
+interface Citation {
+  ref?: string;      // Reference identifier (e.g., "Section 4.2")
+  text?: string;     // Citation text
+  link?: string;     // URL
+  filepath?: string; // File path
+}
+```
+
+At least one of `ref` or `text` is required.
+
+#### Signatory
+
+```typescript
+interface Signatory {
+  party: string;
+  name?: string;
+  title?: string;
+  status: SignatoryStatus;
+  signature_artifacts: SignatureArtifact[];
+}
+```
+
+Where `SignatoryStatus` is one of: `PENDING`, `RECEIVED`, `N_A`
+
+## Key Features
+
+### Hierarchical Entries
+
+Entries can be nested using `parent_entry_id` to create sub-entries. All children must belong to the same stage as their parent.
+
+### Referential Integrity
+
+The schema enforces:
+- Document IDs referenced by entries must exist
+- Each document can map to at most one entry
+- Parent entry IDs must exist and be in the same stage
+- Action items and issues can reference document IDs that must exist
+- Dictionary keys must match the ID field of their values
+
+### Automatic Sort Keys
+
+If entries don't provide `sort_key`, they are automatically assigned incremental values (100, 200, 300, etc.) within their stage.
+
+## Common Use Cases
+
+### Track Document Progress
+
+Use checklist entries to track documents through their lifecycle from draft to filing.
+
+### Link Actions to Documents
+
+Action items can reference multiple documents via `related_document_ids`. Actions appear in the rendered checklist under their linked documents.
+
+### DOCX Export and Import
+
+Use `buildChecklistTemplateContext()` to generate data for DOCX templates, and `importChecklistFromDocx()` to parse human edits back into patch operations.
+
+### Patch-Based Updates
+
+Use the patch validation and apply system for safe, auditable updates with revision tracking.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="buildChecklistTemplateContext()" icon="file-export" href="/api/checklist/build-context">
+    Convert checklist to template data
+  </Card>
+  <Card title="Patch Operations" icon="code-merge" href="/api/checklist/patch-operations">
+    Update checklists with JSON Patch
+  </Card>
+  <Card title="DOCX Import" icon="file-import" href="/api/checklist/import-export">
+    Import edits from rendered documents
+  </Card>
+</CardGroup>

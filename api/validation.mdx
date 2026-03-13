@@ -1,0 +1,451 @@
+---
+title: "Validation API"
+description: "Validate templates, licenses, and rendered DOCX output"
+---
+
+# Validation API
+
+The validation API provides functions to verify template integrity, license compliance, and output document quality. Use these functions to catch errors before filling templates or to validate generated documents.
+
+## validateTemplate()
+
+Validate that a template's metadata fields match the placeholders in its DOCX file.
+
+### Function Signature
+
+```typescript
+function validateTemplate(templateDir: string, templateId: string): TemplateValidationResult
+```
+
+### Import
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { validateTemplate, type TemplateValidationResult } from 'open-agreements';
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { validateTemplate } from 'open-agreements';
+    ```
+  </Tab>
+</Tabs>
+
+### Parameters
+
+<ParamField path="templateDir" type="string" required>
+  Path to the template directory containing `template.docx` and `metadata.yaml`.
+</ParamField>
+
+<ParamField path="templateId" type="string" required>
+  Identifier for the template (used in error messages and result).
+</ParamField>
+
+### Return Value
+
+<ResponseField name="templateId" type="string">
+  The identifier passed as a parameter.
+</ResponseField>
+
+<ResponseField name="valid" type="boolean">
+  `true` if validation passed with no errors, `false` if errors were found.
+</ResponseField>
+
+<ResponseField name="errors" type="string[]">
+  Array of validation error messages. Empty if `valid` is `true`.
+</ResponseField>
+
+<ResponseField name="warnings" type="string[]">
+  Array of non-fatal validation warnings (e.g., optional fields not used).
+</ResponseField>
+
+### Validation Checks
+
+The `validateTemplate()` function performs the following checks:
+
+1. **Metadata Loading**: Verifies `metadata.yaml` can be loaded and parsed
+2. **DOCX Existence**: Confirms `template.docx` exists in the directory
+3. **Field Coverage**: Ensures all metadata fields appear as placeholders in the DOCX
+4. **Required Fields**: Checks that all required fields are present in the DOCX
+5. **Unknown Placeholders**: Warns about `{tags}` in the DOCX not defined in metadata
+6. **Replacement Keys**: For declarative templates, validates replacement keys exist in source
+7. **Replacement Tags**: Ensures tags in replacement values are defined in metadata
+8. **Safe Template Tags**: Blocks unsafe docx-templates control tags that could execute code
+
+<Warning>
+**Security**: The validator rejects templates containing control tags like `{#if}`, `{/if}`, `{>partial}`, or `{= expression}` that could execute arbitrary code. Only simple `{identifier}`, `{IF [!]field}`, `{END-IF}`, and loop tags are permitted.
+</Warning>
+
+### Example
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { validateTemplate } from 'open-agreements';
+
+    const result = validateTemplate(
+      './content/mutual-nda',
+      'mutual-nda'
+    );
+
+    if (result.valid) {
+      console.log(`✓ Template "${result.templateId}" is valid`);
+      if (result.warnings.length > 0) {
+        console.warn('Warnings:');
+        result.warnings.forEach(w => console.warn(`  - ${w}`));
+      }
+    } else {
+      console.error(`✗ Template "${result.templateId}" validation failed:`);
+      result.errors.forEach(e => console.error(`  - ${e}`));
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { validateTemplate } from 'open-agreements';
+
+    const result = validateTemplate(
+      './content/mutual-nda',
+      'mutual-nda'
+    );
+
+    if (result.valid) {
+      console.log(`✓ Template "${result.templateId}" is valid`);
+      if (result.warnings.length > 0) {
+        console.warn('Warnings:');
+        result.warnings.forEach(w => console.warn(`  - ${w}`));
+      }
+    } else {
+      console.error(`✗ Template "${result.templateId}" validation failed:`);
+      result.errors.forEach(e => console.error(`  - ${e}`));
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Source Location
+
+Defined in: `src/core/validation/template.ts:46`
+
+## validateLicense()
+
+Validate a template's license metadata and attribution requirements.
+
+### Function Signature
+
+```typescript
+function validateLicense(templateDir: string, templateId: string): LicenseValidationResult
+```
+
+### Import
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { validateLicense, type LicenseValidationResult } from 'open-agreements';
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { validateLicense } from 'open-agreements';
+    ```
+  </Tab>
+</Tabs>
+
+### Parameters
+
+<ParamField path="templateDir" type="string" required>
+  Path to the template directory containing `metadata.yaml`.
+</ParamField>
+
+<ParamField path="templateId" type="string" required>
+  Identifier for the template (used in error messages and result).
+</ParamField>
+
+### Return Value
+
+<ResponseField name="templateId" type="string">
+  The identifier passed as a parameter.
+</ResponseField>
+
+<ResponseField name="valid" type="boolean">
+  `true` if license is valid, `false` if errors were found.
+</ResponseField>
+
+<ResponseField name="errors" type="string[]">
+  Array of license validation error messages. Empty if `valid` is `true`.
+</ResponseField>
+
+### Validation Checks
+
+1. **Attribution Text**: CC-BY-4.0 and CC-BY-ND-4.0 licenses require non-empty `attribution_text`
+2. **License Enum**: License must be one of: `'CC-BY-4.0'`, `'CC0-1.0'`, `'CC-BY-ND-4.0'`
+3. **Metadata Structure**: Validates metadata can be loaded and parsed
+
+<Info>
+The `allow_derivatives` field indicates whether the committed source DOCX can be modified. It does NOT prevent the tool from rendering filled output — that decision is made by the fill command based on directory context (templates/ vs external/).
+</Info>
+
+### Example
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { validateLicense } from 'open-agreements';
+
+    const result = validateLicense(
+      './content/mutual-nda',
+      'mutual-nda'
+    );
+
+    if (result.valid) {
+      console.log(`✓ License for "${result.templateId}" is valid`);
+    } else {
+      console.error(`✗ License validation failed for "${result.templateId}":`);
+      result.errors.forEach(e => console.error(`  - ${e}`));
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { validateLicense } from 'open-agreements';
+
+    const result = validateLicense(
+      './content/mutual-nda',
+      'mutual-nda'
+    );
+
+    if (result.valid) {
+      console.log(`✓ License for "${result.templateId}" is valid`);
+    } else {
+      console.error(`✗ License validation failed for "${result.templateId}":`);
+      result.errors.forEach(e => console.error(`  - ${e}`));
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Source Location
+
+Defined in: `src/core/validation/license.ts:17`
+
+## validateOutput()
+
+Validate that a rendered DOCX preserves the heading structure of the source template.
+
+### Function Signature
+
+```typescript
+function validateOutput(
+  sourceDocxPath: string,
+  outputDocxPath: string
+): OutputValidationResult
+```
+
+### Import
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { validateOutput, type OutputValidationResult } from 'open-agreements';
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { validateOutput } from 'open-agreements';
+    ```
+  </Tab>
+</Tabs>
+
+### Parameters
+
+<ParamField path="sourceDocxPath" type="string" required>
+  Path to the source template DOCX file.
+</ParamField>
+
+<ParamField path="outputDocxPath" type="string" required>
+  Path to the rendered output DOCX file to validate.
+</ParamField>
+
+### Return Value
+
+<ResponseField name="valid" type="boolean">
+  `true` if output is valid, `false` if errors were found.
+</ResponseField>
+
+<ResponseField name="errors" type="string[]">
+  Array of validation error messages. Empty if `valid` is `true`.
+</ResponseField>
+
+<ResponseField name="sourceHeadingCount" type="number">
+  Number of heading styles found in the source template.
+</ResponseField>
+
+<ResponseField name="outputHeadingCount" type="number">
+  Number of heading styles found in the rendered output.
+</ResponseField>
+
+### Validation Checks
+
+The `validateOutput()` function:
+
+1. Extracts `word/document.xml` from both DOCX files
+2. Counts heading styles (`Heading1`, `Heading2`, etc.) in each document
+3. Reports an error if heading counts don't match
+
+<Warning>
+Heading count mismatches indicate that template rendering may have dropped or duplicated content. This is a strong signal of structural issues in the output document.
+</Warning>
+
+### Example
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { validateOutput } from 'open-agreements';
+
+    const result = validateOutput(
+      './content/mutual-nda/template.docx',
+      './output/mutual-nda.docx'
+    );
+
+    if (result.valid) {
+      console.log('✓ Output document is valid');
+      console.log(`  Source headings: ${result.sourceHeadingCount}`);
+      console.log(`  Output headings: ${result.outputHeadingCount}`);
+    } else {
+      console.error('✗ Output validation failed:');
+      result.errors.forEach(e => console.error(`  - ${e}`));
+      console.error(`  Source had ${result.sourceHeadingCount} headings`);
+      console.error(`  Output has ${result.outputHeadingCount} headings`);
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { validateOutput } from 'open-agreements';
+
+    const result = validateOutput(
+      './content/mutual-nda/template.docx',
+      './output/mutual-nda.docx'
+    );
+
+    if (result.valid) {
+      console.log('✓ Output document is valid');
+      console.log(`  Source headings: ${result.sourceHeadingCount}`);
+      console.log(`  Output headings: ${result.outputHeadingCount}`);
+    } else {
+      console.error('✗ Output validation failed:');
+      result.errors.forEach(e => console.error(`  - ${e}`));
+      console.error(`  Source had ${result.sourceHeadingCount} headings`);
+      console.error(`  Output has ${result.outputHeadingCount} headings`);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Source Location
+
+Defined in: `src/core/validation/output.ts:14`
+
+## Additional Validation Functions
+
+The validation module also exports functions for recipes and external templates:
+
+### validateRecipe()
+
+```typescript
+import { validateRecipe, type RecipeValidationResult } from 'open-agreements';
+
+const result = validateRecipe('./content/recipes/nvca-coi', 'nvca-coi');
+if (!result.valid) {
+  console.error('Recipe validation errors:', result.errors);
+}
+```
+
+### validateExternal()
+
+```typescript
+import { validateExternal, type ExternalValidationResult } from 'open-agreements';
+
+const result = validateExternal('./external/custom-template', 'custom');
+if (!result.valid) {
+  console.error('External template errors:', result.errors);
+}
+```
+
+### assessScanMetadataCoverage()
+
+```typescript
+import { 
+  assessScanMetadataCoverage,
+  type ScanMetadataCoverageReport 
+} from 'open-agreements';
+
+const report = assessScanMetadataCoverage({
+  templateDir: './content/mutual-nda',
+  scanResults: { /* ... */ },
+});
+
+console.log(`Coverage: ${report.coveragePercent}%`);
+console.log(`Missing fields: ${report.missingFields.join(', ')}`);
+```
+
+## Validation Workflow
+
+Recommended validation sequence when working with templates:
+
+<Steps>
+  <Step title="Validate metadata">
+    ```typescript
+    import { validateMetadata } from 'open-agreements';
+    const metaResult = validateMetadata(templateDir);
+    if (!metaResult.valid) throw new Error('Invalid metadata');
+    ```
+  </Step>
+  <Step title="Validate license">
+    ```typescript
+    import { validateLicense } from 'open-agreements';
+    const licResult = validateLicense(templateDir, templateId);
+    if (!licResult.valid) throw new Error('Invalid license');
+    ```
+  </Step>
+  <Step title="Validate template structure">
+    ```typescript
+    import { validateTemplate } from 'open-agreements';
+    const tmpResult = validateTemplate(templateDir, templateId);
+    if (!tmpResult.valid) throw new Error('Invalid template');
+    ```
+  </Step>
+  <Step title="Fill template">
+    ```typescript
+    import { fillTemplate } from 'open-agreements';
+    const result = await fillTemplate({ templateDir, values, outputPath });
+    ```
+  </Step>
+  <Step title="Validate output">
+    ```typescript
+    import { validateOutput } from 'open-agreements';
+    const outResult = validateOutput(templatePath, outputPath);
+    if (!outResult.valid) console.warn('Output may have issues');
+    ```
+  </Step>
+</Steps>
+
+## Related Functions
+
+<CardGroup cols={2}>
+  <Card title="fillTemplate()" icon="file-pen" href="/api/fill-template">
+    Fill templates after validation
+  </Card>
+  <Card title="loadMetadata()" icon="database" href="/api/template-metadata#loadmetadata">
+    Load metadata for validation
+  </Card>
+  <Card title="CLI validate" icon="terminal" href="/cli/validate">
+    Validate templates from command line
+  </Card>
+  <Card title="Recipe Validation" icon="wand-magic-sparkles" href="/api/recipes/overview">
+    Validate recipe templates
+  </Card>
+</CardGroup>

@@ -1,0 +1,422 @@
+---
+title: "Template Metadata"
+description: "Load and work with template metadata, field definitions, and schemas"
+---
+
+# Template Metadata API
+
+Template metadata defines the structure, fields, licensing, and attribution for each legal agreement template. The metadata API provides functions to load, validate, and work with template metadata programmatically.
+
+## loadMetadata()
+
+Load and parse metadata from a template directory.
+
+### Function Signature
+
+```typescript
+function loadMetadata(templateDir: string): TemplateMetadata
+```
+
+### Import
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { loadMetadata, type TemplateMetadata } from 'open-agreements';
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { loadMetadata } from 'open-agreements';
+    ```
+  </Tab>
+</Tabs>
+
+### Parameters
+
+<ParamField path="templateDir" type="string" required>
+  Path to the template directory containing `metadata.yaml`.
+</ParamField>
+
+### Return Value
+
+Returns a `TemplateMetadata` object:
+
+<ResponseField name="name" type="string">
+  Human-readable template name (e.g., "Mutual NDA").
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Optional description of the template's purpose and use cases.
+</ResponseField>
+
+<ResponseField name="source_url" type="string">
+  URL to the original template source (must be a valid URL).
+</ResponseField>
+
+<ResponseField name="version" type="string">
+  Version identifier for the template.
+</ResponseField>
+
+<ResponseField name="license" type="License">
+  License type: `'CC-BY-4.0'`, `'CC0-1.0'`, or `'CC-BY-ND-4.0'`.
+</ResponseField>
+
+<ResponseField name="allow_derivatives" type="boolean">
+  Whether the source DOCX can be modified. When `false`, the template is read-only in the repository.
+</ResponseField>
+
+<ResponseField name="attribution_text" type="string">
+  Attribution text required by CC-BY licenses. Must be non-empty for CC-BY-4.0 and CC-BY-ND-4.0.
+</ResponseField>
+
+<ResponseField name="fields" type="FieldDefinition[]">
+  Array of field definitions describing the data inputs for the template.
+</ResponseField>
+
+<ResponseField name="required_fields" type="string[]">
+  Array of field names that must be provided when filling the template. Defaults to empty array if not specified.
+</ResponseField>
+
+### Example
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { loadMetadata } from 'open-agreements';
+    import { join } from 'node:path';
+
+    const templateDir = join(process.cwd(), 'content', 'mutual-nda');
+    const metadata = loadMetadata(templateDir);
+
+    console.log(`Template: ${metadata.name}`);
+    console.log(`License: ${metadata.license}`);
+    console.log(`Fields: ${metadata.fields.length}`);
+    console.log(`Required: ${metadata.required_fields.length}`);
+
+    // List all field names
+    metadata.fields.forEach(field => {
+      const required = metadata.required_fields.includes(field.name) ? '(required)' : '';
+      console.log(`  - ${field.name}: ${field.type} ${required}`);
+    });
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { loadMetadata } from 'open-agreements';
+    import { join } from 'node:path';
+
+    const templateDir = join(process.cwd(), 'content', 'mutual-nda');
+    const metadata = loadMetadata(templateDir);
+
+    console.log(`Template: ${metadata.name}`);
+    console.log(`License: ${metadata.license}`);
+    console.log(`Fields: ${metadata.fields.length}`);
+    console.log(`Required: ${metadata.required_fields.length}`);
+
+    // List all field names
+    metadata.fields.forEach(field => {
+      const required = metadata.required_fields.includes(field.name) ? '(required)' : '';
+      console.log(`  - ${field.name}: ${field.type} ${required}`);
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Source Location
+
+Defined in: `src/core/metadata.ts:150`
+
+## FieldDefinition Type
+
+Each field in the `fields` array is a `FieldDefinition` object:
+
+<ResponseField name="name" type="string">
+  Field identifier used in template placeholders (e.g., `party_1_name`).
+</ResponseField>
+
+<ResponseField name="type" type="'string' | 'date' | 'number' | 'boolean' | 'enum' | 'array'">
+  Data type for the field value.
+</ResponseField>
+
+<ResponseField name="description" type="string">
+  Human-readable description of the field's purpose.
+</ResponseField>
+
+<ResponseField name="default" type="string">
+  Optional default value. Must be valid for the declared type (e.g., `'true'`/`'false'` for boolean).
+</ResponseField>
+
+<ResponseField name="options" type="string[]">
+  Required for `enum` type fields. Array of valid option values. Must be non-empty for enum fields.
+</ResponseField>
+
+<ResponseField name="section" type="string">
+  Optional UI grouping hint for organizing fields in forms.
+</ResponseField>
+
+### Example Field Definitions
+
+```typescript
+const fieldExamples: FieldDefinition[] = [
+  {
+    name: 'party_1_name',
+    type: 'string',
+    description: 'Legal name of first party',
+  },
+  {
+    name: 'effective_date',
+    type: 'date',
+    description: 'Agreement effective date',
+  },
+  {
+    name: 'auto_renew',
+    type: 'boolean',
+    description: 'Whether agreement automatically renews',
+    default: 'false',
+  },
+  {
+    name: 'party_1_type',
+    type: 'enum',
+    description: 'Type of first party signatory',
+    options: ['individual', 'entity'],
+    default: 'entity',
+  },
+];
+```
+
+## validateMetadata()
+
+Validate template metadata without throwing errors.
+
+### Function Signature
+
+```typescript
+function validateMetadata(templateDir: string): { valid: boolean; errors: string[] }
+```
+
+### Import
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { validateMetadata } from 'open-agreements';
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { validateMetadata } from 'open-agreements';
+    ```
+  </Tab>
+</Tabs>
+
+### Parameters
+
+<ParamField path="templateDir" type="string" required>
+  Path to the template directory containing `metadata.yaml`.
+</ParamField>
+
+### Return Value
+
+<ResponseField name="valid" type="boolean">
+  `true` if metadata is valid, `false` if errors were found.
+</ResponseField>
+
+<ResponseField name="errors" type="string[]">
+  Array of validation error messages. Empty if `valid` is `true`.
+</ResponseField>
+
+### Example
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { validateMetadata } from 'open-agreements';
+
+    const result = validateMetadata('./content/mutual-nda');
+
+    if (result.valid) {
+      console.log('✓ Metadata is valid');
+    } else {
+      console.error('✗ Metadata validation failed:');
+      result.errors.forEach(error => console.error(`  - ${error}`));
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { validateMetadata } from 'open-agreements';
+
+    const result = validateMetadata('./content/mutual-nda');
+
+    if (result.valid) {
+      console.log('✓ Metadata is valid');
+    } else {
+      console.error('✗ Metadata validation failed:');
+      result.errors.forEach(error => console.error(`  - ${error}`));
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Source Location
+
+Defined in: `src/core/metadata.ts:157`
+
+## Metadata Schemas
+
+The API exports Zod schemas for runtime validation and type inference:
+
+### TemplateMetadataSchema
+
+```typescript
+import { TemplateMetadataSchema } from 'open-agreements';
+
+// Parse and validate raw data
+const metadata = TemplateMetadataSchema.parse(rawData);
+```
+
+### FieldDefinitionSchema
+
+```typescript
+import { FieldDefinitionSchema } from 'open-agreements';
+
+// Validate a single field definition
+const field = FieldDefinitionSchema.parse({
+  name: 'party_name',
+  type: 'string',
+  description: 'Party legal name',
+});
+```
+
+### LicenseEnum
+
+```typescript
+import { LicenseEnum, type License } from 'open-agreements';
+
+// Type-safe license values
+const license: License = 'CC-BY-4.0';
+
+// Validate a license string
+LicenseEnum.parse('CC-BY-4.0'); // OK
+LicenseEnum.parse('MIT'); // Throws ZodError
+```
+
+## Recipe Metadata
+
+For non-redistributable templates (NVCA), use recipe metadata functions:
+
+### loadRecipeMetadata()
+
+```typescript
+import { loadRecipeMetadata, type RecipeMetadata } from 'open-agreements';
+
+const recipeDir = './content/recipes/nvca-coi';
+const recipeMetadata = loadRecipeMetadata(recipeDir);
+
+console.log(`Recipe: ${recipeMetadata.name}`);
+console.log(`Source: ${recipeMetadata.source_url}`);
+console.log(`Source SHA-256: ${recipeMetadata.source_sha256}`);
+```
+
+### validateRecipeMetadata()
+
+```typescript
+import { validateRecipeMetadata } from 'open-agreements';
+
+const result = validateRecipeMetadata('./content/recipes/nvca-coi');
+if (!result.valid) {
+  console.error('Recipe metadata errors:', result.errors);
+}
+```
+
+### Source Location
+
+Recipe functions defined in: `src/core/metadata.ts:202-242`
+
+## External Template Metadata
+
+For external templates with source hash verification:
+
+### loadExternalMetadata()
+
+```typescript
+import { loadExternalMetadata, type ExternalMetadata } from 'open-agreements';
+
+const externalDir = './external/custom-template';
+const metadata = loadExternalMetadata(externalDir);
+
+// ExternalMetadata includes source_sha256 field
+console.log(`Source hash: ${metadata.source_sha256}`);
+```
+
+### validateExternalMetadata()
+
+```typescript
+import { validateExternalMetadata } from 'open-agreements';
+
+const result = validateExternalMetadata('./external/custom-template');
+if (!result.valid) {
+  console.error('External metadata errors:', result.errors);
+}
+```
+
+### Source Location
+
+External functions defined in: `src/core/metadata.ts:176-198`
+
+## Clean Configuration
+
+Load recipe cleaning configuration:
+
+### loadCleanConfig()
+
+```typescript
+import { loadCleanConfig, type CleanConfig } from 'open-agreements';
+
+const cleanConfig = loadCleanConfig('./content/recipes/nvca-coi');
+
+console.log('Remove footnotes:', cleanConfig.removeFootnotes);
+console.log('Paragraph patterns:', cleanConfig.removeParagraphPatterns);
+console.log('Remove ranges:', cleanConfig.removeRanges);
+console.log('Clear parts:', cleanConfig.clearParts);
+```
+
+### CleanConfig Type
+
+<ResponseField name="removeFootnotes" type="boolean">
+  Whether to remove all footnotes from the source document. Defaults to `false`.
+</ResponseField>
+
+<ResponseField name="removeParagraphPatterns" type="string[]">
+  Array of regex patterns for paragraphs to remove. Defaults to empty array.
+</ResponseField>
+
+<ResponseField name="removeRanges" type="Array<{start: string, end: string}>">
+  Array of text ranges to remove, defined by start and end markers. Defaults to empty array.
+</ResponseField>
+
+<ResponseField name="clearParts" type="string[]">
+  Array of OOXML part names to clear (e.g., `['header1.xml']`). Defaults to empty array.
+</ResponseField>
+
+### Source Location
+
+Defined in: `src/core/metadata.ts:209`
+
+## Related Functions
+
+<CardGroup cols={2}>
+  <Card title="fillTemplate()" icon="file-pen" href="/api/fill-template">
+    Fill a template using metadata
+  </Card>
+  <Card title="validateTemplate()" icon="shield-check" href="/api/validation#validatetemplate">
+    Validate template metadata and fields
+  </Card>
+  <Card title="listTemplateEntries()" icon="list" href="/api/template-metadata#listtemplateentries">
+    Discover available templates
+  </Card>
+  <Card title="Recipe Engine" icon="wand-magic-sparkles" href="/api/recipes/overview">
+    Transform non-redistributable templates
+  </Card>
+</CardGroup>

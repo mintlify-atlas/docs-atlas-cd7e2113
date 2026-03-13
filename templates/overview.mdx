@@ -1,0 +1,260 @@
+---
+title: Templates Overview
+description: Learn about OpenAgreements' 30+ legal agreement templates, their structure, and licensing
+---
+
+OpenAgreements includes 30+ professionally drafted legal agreement templates covering NDAs, cloud terms, employment documents, contractor agreements, SAFEs, and NVCA financing documents.
+
+## Template Categories
+
+Templates are organized into three tiers based on their licensing and distribution model:
+
+<CardGroup cols={3}>
+  <Card title="Internal Templates" icon="file-contract">
+    **30 templates** from Common Paper, Bonterms, and OpenAgreements
+    
+    Shipped in the package with `{tag}` placeholders
+    
+    License: CC BY 4.0 or CC0 1.0
+  </Card>
+  
+  <Card title="External Templates" icon="download">
+    **4 templates** from Y Combinator
+    
+    Vendored unchanged in the package
+    
+    License: CC BY-ND 4.0
+  </Card>
+  
+  <Card title="Recipe Templates" icon="wand-magic-sparkles">
+    **7 templates** from NVCA
+    
+    Downloaded on demand at runtime
+    
+    Not redistributable
+  </Card>
+</CardGroup>
+
+## How Templates Work
+
+### Internal Templates (CC BY 4.0)
+
+**What they are:** Most of OpenAgreements' templates come from [Common Paper](https://commonpaper.com) and [Bonterms](https://bonterms.com) — community-maintained standard agreements designed for modern business use.
+
+**How they work:**
+- The original DOCX is converted to use `{field_name}` placeholders
+- Templates are shipped directly in the npm package
+- You can modify and redistribute them (with attribution)
+- All formatting from the source document is preserved
+
+**Examples:** Common Paper Mutual NDA, Bonterms Professional Services Agreement, Common Paper Cloud Service Agreement
+
+### External Templates (CC BY-ND 4.0)
+
+**What they are:** Templates from publishers who allow redistribution but not modification.
+
+**How they work:**
+- The original DOCX is vendored unchanged in the package
+- OpenAgreements adds `{field_name}` placeholders in well-defined locations
+- The filled output is a transient derivative created on your machine only
+- You cannot modify the source template or redistribute modified versions
+
+**Examples:** Y Combinator SAFEs (Valuation Cap, Discount, MFN, Pro Rata Side Letter)
+
+### Recipe Templates (Non-Redistributable)
+
+**What they are:** Templates from sources like NVCA that are freely downloadable but cannot be redistributed.
+
+**How they work:**
+- OpenAgreements ships only transformation instructions (the "recipe")
+- The source DOCX is downloaded from the publisher at runtime
+- The recipe cleans, patches, and prepares the document for filling
+- The source document never enters the npm package
+
+**Examples:** NVCA Stock Purchase Agreement, Certificate of Incorporation, Investors Rights Agreement
+
+<Note>
+For sensitive documents, you can use fully local package execution to ensure templates and filled documents never leave your machine. See the [Trust Checklist](/advanced/trust-checklist) for details.
+</Note>
+
+## Template Structure
+
+Each template is a self-contained directory with standardized files:
+
+```
+content/templates/<name>/
+├── template.docx          # DOCX with {tag} placeholders
+├── metadata.yaml          # Fields, license, source, attribution
+└── README.md              # Template-specific documentation
+```
+
+Recipe templates have a different structure since they don't include the source document:
+
+```
+content/recipes/<name>/
+├── metadata.yaml          # Fields, source URL, SHA-256 hash
+├── replacements.json      # Placeholder-to-tag mappings
+├── clean.json            # Content removal rules (optional)
+└── normalize.json        # Post-fill cleanup rules (optional)
+```
+
+## Field Types
+
+Templates use strongly-typed fields defined in `metadata.yaml`:
+
+| Type | Description | Example |
+|------|-------------|----------|
+| `string` | Free-form text | Company name, address |
+| `date` | Date value (any format) | Effective date, start date |
+| `number` | Numeric value | Number of shares, percentage |
+| `boolean` | true/false | Auto-renew, has pilot |
+| `enum` | Fixed set of options | Entity vs individual, arbitration vs courts |
+| `array` | List of values | Multiple parties, line items |
+
+### Required vs Optional Fields
+
+Fields can be:
+- **Required**: Listed in `required_fields` array — must be provided or they render as `_______`
+- **Optional with default**: Have a `default` value that's used when not provided
+- **Optional empty**: Have `default: ""` and become invisible when not filled
+
+Example from Common Paper Mutual NDA:
+
+```yaml
+fields:
+  - name: effective_date
+    type: date
+    description: Date the NDA takes effect
+    # No default — required field, shows _______ if missing
+    
+  - name: governing_law
+    type: string
+    description: State whose laws govern
+    default: Delaware
+    # Optional with default
+    
+  - name: changes_to_standard_terms
+    type: string
+    description: Modifications to standard terms
+    default: None.
+    # Optional with meaningful default
+
+required_fields:
+  - effective_date
+  - governing_law
+```
+
+## Licensing and Attribution
+
+OpenAgreements respects source licenses and provides proper attribution:
+
+### CC BY 4.0 (Attribution)
+
+- **Templates:** Most Common Paper and Bonterms templates
+- **You can:** Use commercially, modify, redistribute
+- **You must:** Provide attribution to the original source
+- **Attribution is automatic:** OpenAgreements includes attribution text in filled documents
+
+### CC0 1.0 (Public Domain)
+
+- **Templates:** Some Bonterms templates
+- **You can:** Use for any purpose, no restrictions
+- **You must:** Nothing — no attribution required
+- **Attribution provided anyway:** OpenAgreements includes attribution as a courtesy
+
+### CC BY-ND 4.0 (No Derivatives)
+
+- **Templates:** Y Combinator SAFEs
+- **You can:** Use commercially, redistribute unchanged
+- **You cannot:** Modify or create derivatives for redistribution
+- **How OpenAgreements handles it:** Filled documents are transient derivatives on your machine only
+
+### Non-Redistributable (NVCA)
+
+- **Templates:** NVCA model financing documents
+- **You can:** Download and use from the publisher
+- **You cannot:** Redistribute the source documents
+- **How OpenAgreements handles it:** Downloads source at runtime, never ships it in the package
+
+<Warning>
+Do not commit or redistribute NVCA source documents. OpenAgreements enforces this by design — recipe directories cannot contain `.docx` files.
+</Warning>
+
+## Trust and Data Flow
+
+OpenAgreements supports two execution modes:
+
+### Hosted MCP Connector
+
+- **Best for:** Convenience and quick setup
+- **Data flow:** Template selection and field values sent to remote MCP server at `openagreements.ai`
+- **Use when:** Working with non-sensitive agreements
+
+### Fully Local Execution
+
+- **Best for:** Sensitive documents, strict data policies
+- **Data flow:** Everything stays on your machine — `npx`, global install, or local stdio MCP
+- **Use when:** Document sensitivity requires machine-local workflows
+
+<Tip>
+There's no global default recommendation. Choose based on document sensitivity, internal policy, and workflow speed needs. See [Trust Checklist](/advanced/trust-checklist) for a 60-second data-flow summary.
+</Tip>
+
+## Quality and Validation
+
+Every template goes through automated validation:
+
+- **Metadata schema validation**: All required fields present, types correct
+- **Placeholder-field alignment**: Every `{tag}` in the DOCX has a corresponding field definition
+- **License compliance**: Attribution text matches license requirements
+- **DOCX integrity**: Document can be opened and processed
+- **Recipe integrity**: Source SHA-256 hash matches, transformation rules valid
+
+Run validation on any template:
+
+```bash
+# Validate one template
+open-agreements validate common-paper-mutual-nda
+
+# Validate all templates
+open-agreements validate
+```
+
+## Template Discovery
+
+List all available templates with details:
+
+```bash
+# Human-readable list
+open-agreements list
+
+# Machine-readable JSON (for AI agents and automation)
+open-agreements list --json
+```
+
+The JSON output includes:
+- Template name and description
+- All field definitions with types and descriptions
+- License and attribution information
+- Required vs optional fields
+- Default values
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Browse Templates" icon="grid" href="/templates/catalog">
+    Explore all 30+ templates with details and field requirements
+  </Card>
+  
+  <Card title="Add a Template" icon="plus" href="/templates/adding-templates">
+    Contribute a new CC BY or CC0 template
+  </Card>
+  
+  <Card title="Recipe System" icon="wand-magic-sparkles" href="/templates/recipes">
+    Learn how recipes work for NVCA templates
+  </Card>
+  
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    View all CLI commands for working with templates
+  </Card>
+</CardGroup>

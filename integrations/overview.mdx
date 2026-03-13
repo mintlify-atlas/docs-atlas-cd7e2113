@@ -1,0 +1,119 @@
+---
+title: Integrations Overview
+description: Connect OpenAgreements with Claude Code, Gemini, MCP servers, and workspace management tools
+---
+
+OpenAgreements integrates with multiple AI coding assistants and provides MCP servers for contract template filling and workspace management.
+
+## Integration Options
+
+<CardGroup cols={2}>
+  <Card title="Claude Code" icon="code" href="/integrations/claude-code">
+    Use OpenAgreements as a plugin or agent skill in Claude Code
+  </Card>
+  <Card title="Gemini" icon="sparkles" href="/integrations/gemini">
+    Install as a Gemini CLI extension with MCP support
+  </Card>
+  <Card title="MCP Servers" icon="server" href="/integrations/mcp-servers">
+    Local stdio MCP servers for template drafting and workspace operations
+  </Card>
+  <Card title="Workspace Management" icon="folder" href="/integrations/workspace-management">
+    Organize contract repositories with filesystem-based tooling
+  </Card>
+</CardGroup>
+
+## Execution Modes
+
+OpenAgreements supports two trust boundaries:
+
+### Remote MCP (Hosted)
+
+- Zero local dependencies
+- Fast setup in Claude Desktop or compatible clients
+- Server handles DOCX generation
+- Endpoint: `https://openagreements.ai/api/mcp`
+- Best for: Quick setup, non-sensitive documents
+
+### Local Execution
+
+- Fully local package execution via `npx` or global install
+- No network calls during template filling
+- Local stdio MCP servers available
+- Best for: Sensitive documents, internal policy compliance
+
+<Note>
+  Choose based on document sensitivity and workflow speed needs. See the [trust checklist](https://github.com/open-agreements/open-agreements/blob/main/docs/trust-checklist.md) for data-flow details.
+</Note>
+
+## Quick Start by Tool
+
+<Tabs>
+  <Tab title="Claude Code">
+    Install the agent skill:
+    ```bash
+    npx skills add open-agreements/open-agreements
+    ```
+    Then ask Claude to draft an agreement.
+  </Tab>
+  <Tab title="Gemini">
+    Install the CLI extension:
+    ```bash
+    gemini extensions install https://github.com/open-agreements/open-agreements
+    ```
+    Then ask Gemini to draft an agreement.
+  </Tab>
+  <Tab title="MCP">
+    Add to your MCP configuration:
+    ```json
+    {
+      "mcpServers": {
+        "open-agreements": {
+          "url": "https://openagreements.ai/api/mcp"
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="CLI">
+    Install globally:
+    ```bash
+    npm install -g open-agreements
+    ```
+    List templates:
+    ```bash
+    open-agreements list
+    ```
+  </Tab>
+</Tabs>
+
+## Available Templates
+
+41 templates across 9 categories:
+
+- **NDAs and confidentiality** (3 templates) — Common Paper, Bonterms
+- **Professional services** (4 templates) — Consulting, contractor agreements
+- **Cloud/SaaS agreements** (10 templates) — Service terms, licenses
+- **Employment** (3 templates) — Offer letters, IP assignments
+- **Y Combinator SAFEs** (4 templates) — Valuation cap, discount, MFN
+- **NVCA venture financing** (7 templates) — Term sheets, stock purchase agreements
+- **Data privacy** (4 templates) — DPAs, BAAs, AI addendums
+- **Deal administration** (5 templates)
+- **Amendments** (1 template)
+
+<Tip>
+  Templates are licensed by their respective authors (CC BY 4.0, CC0 1.0, or CC BY-ND 4.0). See each template's metadata for attribution details.
+</Tip>
+
+## Next Steps
+
+<Steps>
+  <Step title="Choose Your Integration">
+    Select Claude Code, Gemini, or direct MCP integration based on your workflow
+  </Step>
+  <Step title="Configure MCP Servers (Optional)">
+    Set up local or remote MCP servers for template drafting and workspace management
+  </Step>
+  <Step title="Draft Your First Agreement">
+    Use natural language to select a template, answer questions, and generate a DOCX
+  </Step>
+</Steps>

@@ -1,0 +1,353 @@
+---
+title: "fillTemplate()"
+description: "Fill a template with data and generate a DOCX document"
+---
+
+# fillTemplate()
+
+The `fillTemplate()` function is the primary API for filling legal agreement templates with user data and generating professionally formatted DOCX output files.
+
+## Function Signature
+
+```typescript
+function fillTemplate(options: FillOptions): Promise<FillResult>
+```
+
+## Import
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { fillTemplate, type FillOptions, type FillResult } from 'open-agreements';
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { fillTemplate } from 'open-agreements';
+    ```
+  </Tab>
+</Tabs>
+
+## Parameters
+
+### FillOptions
+
+<ParamField path="templateDir" type="string" required>
+  Absolute or relative path to the template directory containing `template.docx` and `metadata.yaml`.
+</ParamField>
+
+<ParamField path="values" type="Record<string, unknown>" required>
+  Key-value pairs mapping field names to values. Keys must match field names defined in the template's `metadata.yaml`.
+</ParamField>
+
+<ParamField path="outputPath" type="string" required>
+  Path where the filled DOCX file will be written. Parent directories will be created if they don't exist.
+</ParamField>
+
+<ParamField path="postProcess" type="(outputPath: string) => void | Promise<void>">
+  Optional callback function to run after the document is generated. Receives the output file path as a parameter.
+</ParamField>
+
+## Return Value
+
+### FillResult
+
+Returns a Promise that resolves to a `FillResult` object:
+
+<ResponseField name="outputPath" type="string">
+  The absolute path to the generated DOCX file.
+</ResponseField>
+
+<ResponseField name="metadata" type="TemplateMetadata">
+  The parsed metadata from the template's `metadata.yaml` file, including field definitions, license information, and attribution.
+</ResponseField>
+
+<ResponseField name="fieldsUsed" type="string[]">
+  Array of field names that were actually used during template filling. Useful for detecting unused fields or validating input coverage.
+</ResponseField>
+
+## Examples
+
+### Basic Usage
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { fillTemplate } from 'open-agreements';
+    import { join } from 'node:path';
+
+    async function fillMutualNDA() {
+      const result = await fillTemplate({
+        templateDir: join(process.cwd(), 'content', 'mutual-nda'),
+        values: {
+          party_1_name: 'Acme Corporation',
+          party_1_type: 'entity',
+          party_1_signatory_name: 'Jane Smith',
+          party_1_signatory_title: 'CEO',
+          party_2_name: 'Widget Industries',
+          party_2_type: 'entity',
+          party_2_signatory_name: 'John Doe',
+          party_2_signatory_title: 'CTO',
+          effective_date: '2024-03-15',
+        },
+        outputPath: './output/mutual-nda.docx',
+      });
+
+      console.log(`✓ Generated: ${result.outputPath}`);
+      console.log(`✓ Template: ${result.metadata.name}`);
+      console.log(`✓ Fields used: ${result.fieldsUsed.length}`);
+    }
+
+    fillMutualNDA().catch(console.error);
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { fillTemplate } from 'open-agreements';
+    import { join } from 'node:path';
+
+    async function fillMutualNDA() {
+      const result = await fillTemplate({
+        templateDir: join(process.cwd(), 'content', 'mutual-nda'),
+        values: {
+          party_1_name: 'Acme Corporation',
+          party_1_type: 'entity',
+          party_1_signatory_name: 'Jane Smith',
+          party_1_signatory_title: 'CEO',
+          party_2_name: 'Widget Industries',
+          party_2_type: 'entity',
+          party_2_signatory_name: 'John Doe',
+          party_2_signatory_title: 'CTO',
+          effective_date: '2024-03-15',
+        },
+        outputPath: './output/mutual-nda.docx',
+      });
+
+      console.log(`✓ Generated: ${result.outputPath}`);
+      console.log(`✓ Template: ${result.metadata.name}`);
+      console.log(`✓ Fields used: ${result.fieldsUsed.length}`);
+    }
+
+    fillMutualNDA().catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+### With Post-Processing
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { fillTemplate } from 'open-agreements';
+    import { copyFile } from 'node:fs/promises';
+    import { join } from 'node:path';
+
+    async function fillWithBackup() {
+      const result = await fillTemplate({
+        templateDir: './content/cloud-terms',
+        values: {
+          provider_name: 'CloudCo Inc',
+          customer_name: 'ClientCorp LLC',
+          effective_date: '2024-04-01',
+        },
+        outputPath: './output/cloud-terms.docx',
+        postProcess: async (outputPath) => {
+          // Create a timestamped backup
+          const timestamp = new Date().toISOString().split('T')[0];
+          const backupPath = `./backups/cloud-terms-${timestamp}.docx`;
+          await copyFile(outputPath, backupPath);
+          console.log(`Backup created: ${backupPath}`);
+        },
+      });
+
+      return result;
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { fillTemplate } from 'open-agreements';
+    import { copyFile } from 'node:fs/promises';
+
+    async function fillWithBackup() {
+      const result = await fillTemplate({
+        templateDir: './content/cloud-terms',
+        values: {
+          provider_name: 'CloudCo Inc',
+          customer_name: 'ClientCorp LLC',
+          effective_date: '2024-04-01',
+        },
+        outputPath: './output/cloud-terms.docx',
+        postProcess: async (outputPath) => {
+          // Create a timestamped backup
+          const timestamp = new Date().toISOString().split('T')[0];
+          const backupPath = `./backups/cloud-terms-${timestamp}.docx`;
+          await copyFile(outputPath, backupPath);
+          console.log(`Backup created: ${backupPath}`);
+        },
+      });
+
+      return result;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Loading Values from JSON
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { fillTemplate } from 'open-agreements';
+    import { readFile } from 'node:fs/promises';
+
+    async function fillFromJSON(valuesPath: string) {
+      // Load values from a JSON file
+      const valuesJSON = await readFile(valuesPath, 'utf-8');
+      const values = JSON.parse(valuesJSON) as Record<string, unknown>;
+
+      const result = await fillTemplate({
+        templateDir: './content/safe-simple',
+        values,
+        outputPath: './output/safe.docx',
+      });
+
+      return result;
+    }
+
+    // Usage
+    fillFromJSON('./data/safe-values.json').catch(console.error);
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { fillTemplate } from 'open-agreements';
+    import { readFile } from 'node:fs/promises';
+
+    async function fillFromJSON(valuesPath) {
+      // Load values from a JSON file
+      const valuesJSON = await readFile(valuesPath, 'utf-8');
+      const values = JSON.parse(valuesJSON);
+
+      const result = await fillTemplate({
+        templateDir: './content/safe-simple',
+        values,
+        outputPath: './output/safe.docx',
+      });
+
+      return result;
+    }
+
+    // Usage
+    fillFromJSON('./data/safe-values.json').catch(console.error);
+    ```
+  </Tab>
+</Tabs>
+
+## Field Validation
+
+The `fillTemplate()` function automatically validates that:
+
+1. All required fields defined in `metadata.yaml` are provided
+2. Field values match their expected types (string, number, boolean, date, enum)
+3. Enum fields contain valid options from the metadata
+
+Warnings are logged to the console for:
+- Unknown fields provided in `values` that aren't in metadata
+- Optional fields that are defined but not filled
+
+<Warning>
+Missing required fields will cause the function to throw an error. Check the template's metadata before calling fillTemplate().
+</Warning>
+
+## Automatic Field Processing
+
+OpenAgreements automatically processes certain field patterns:
+
+### Signatory Fields
+
+For any signatory with a `*_type` field:
+- When `type === 'individual'`: Company and title fields are hidden
+- When `type === 'entity'`: All fields are displayed
+- Display fields are auto-computed: `*_title_display`, `*_company_display`
+
+### Conditional Display Fields
+
+Complex radio/checkbox groups are computed automatically:
+- `order_date_display` (from `order_date_is_last_signature` + `custom_order_date`)
+- `payment_display` (from `payment_by_invoice` + related fields)
+- `fees_display` (from multiple fee checkboxes)
+- `auto_renewal_display` (from `auto_renew` + `non_renewal_notice_days`)
+
+<Info>
+Display field computation is template-specific and activates only when the relevant field names are present in metadata.
+</Info>
+
+## Error Handling
+
+Common errors and how to handle them:
+
+<Tabs>
+  <Tab title="TypeScript">
+    ```typescript
+    import { fillTemplate } from 'open-agreements';
+
+    try {
+      const result = await fillTemplate({
+        templateDir: './content/mutual-nda',
+        values: { party_1_name: 'Acme' },
+        outputPath: './output.docx',
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        if (error.message.includes('Required field')) {
+          console.error('Missing required fields:', error.message);
+        } else if (error.message.includes('template.docx not found')) {
+          console.error('Invalid template directory:', error.message);
+        } else {
+          console.error('Template fill failed:', error.message);
+        }
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { fillTemplate } from 'open-agreements';
+
+    try {
+      const result = await fillTemplate({
+        templateDir: './content/mutual-nda',
+        values: { party_1_name: 'Acme' },
+        outputPath: './output.docx',
+      });
+    } catch (error) {
+      if (error.message.includes('Required field')) {
+        console.error('Missing required fields:', error.message);
+      } else if (error.message.includes('template.docx not found')) {
+        console.error('Invalid template directory:', error.message);
+      } else {
+        console.error('Template fill failed:', error.message);
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Source Location
+
+Defined in: `src/core/engine.ts:224`
+
+## Related Functions
+
+<CardGroup cols={2}>
+  <Card title="loadMetadata()" icon="database" href="/api/template-metadata#loadmetadata">
+    Load template metadata before filling
+  </Card>
+  <Card title="validateTemplate()" icon="shield-check" href="/api/validation#validatetemplate">
+    Validate a template before filling
+  </Card>
+  <Card title="listTemplateEntries()" icon="list" href="/api/template-metadata#listtemplateentries">
+    Discover available templates
+  </Card>
+</CardGroup>

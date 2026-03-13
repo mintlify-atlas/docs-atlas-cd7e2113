@@ -1,0 +1,329 @@
+---
+title: 'buildChecklistTemplateContext()'
+description: 'Convert a closing checklist into template data for DOCX rendering'
+---
+
+## Overview
+
+The `buildChecklistTemplateContext()` function transforms a `ClosingChecklist` object into a flat, table-based format suitable for rendering with docx-templates.
+
+**Location**: `src/core/checklist/index.ts:373`
+
+## Function Signature
+
+```typescript
+function buildChecklistTemplateContext(
+  data: unknown
+): ChecklistTemplateContext
+```
+
+<ParamField path="data" type="unknown" required>
+  Raw checklist data (validated against `ClosingChecklistSchema`)
+</ParamField>
+
+<ResponseField name="return" type="ChecklistTemplateContext">
+  Flattened template context ready for DOCX rendering
+</ResponseField>
+
+## Return Type
+
+```typescript
+interface ChecklistTemplateContext {
+  deal_name: string;
+  updated_at: string;
+  documents: TemplateDocumentRow[];
+  action_items: TemplateActionRow[];
+  open_issues: TemplateIssueRow[];
+}
+```
+
+<ResponseField name="deal_name" type="string">
+  Name of the deal from the checklist
+</ResponseField>
+
+<ResponseField name="updated_at" type="string">
+  ISO 8601 timestamp of last update
+</ResponseField>
+
+<ResponseField name="documents" type="TemplateDocumentRow[]">
+  Array of document rows including stage headings, entries, citations, signatories, and linked actions/issues
+</ResponseField>
+
+<ResponseField name="action_items" type="TemplateActionRow[]">
+  Unlinked action items (not associated with any document)
+</ResponseField>
+
+<ResponseField name="open_issues" type="TemplateIssueRow[]">
+  Unlinked issues (not associated with any document)
+</ResponseField>
+
+### TemplateDocumentRow
+
+Each document row represents either:
+- A **stage heading** (empty `entry_id`, title like "I. PRE-SIGNING")
+- A **main entry** (has `entry_id`, title, status, responsible party)
+- A **citation sub-row** (empty `entry_id`, indented title starting with "Ref:")
+- A **signatory sub-row** (empty `entry_id`, checkbox format)
+- A **linked action sub-row** (empty `entry_id`, checkbox format)
+- A **linked issue sub-row** (empty `entry_id`, checkbox format)
+
+```typescript
+interface TemplateDocumentRow {
+  entry_id: string;      // Empty for stage headings and sub-rows
+  title: string;         // Indented with \u00A0 (NBSP) for nested entries
+  link: string;          // Primary link from ChecklistDocument
+  status: string;        // Human-readable status (e.g., "Form Final")
+  responsible: string;   // Merged "Entity (Individual)" format
+}
+```
+
+<ResponseField name="entry_id" type="string">
+  Entry ID for main entries, empty for headings and sub-rows
+</ResponseField>
+
+<ResponseField name="title" type="string">
+  - Stage headings: Roman numeral format (e.g., "I. PRE-SIGNING")
+  - Main entries: Title with NBSP indentation for hierarchy
+  - Citations: "  Ref: [citation]" format
+  - Signatories: "  [x] Signatory: Party (Name, Title): Status"
+  - Actions: "  [x] Action A-1: Description"
+  - Issues: "  [x] Issue I-1: Title"
+</ResponseField>
+
+<ResponseField name="link" type="string">
+  Primary link for main entries, empty for sub-rows
+</ResponseField>
+
+<ResponseField name="status" type="string">
+  Human-readable status for main entries and linked items, empty for headings/citations
+</ResponseField>
+
+<ResponseField name="responsible" type="string">
+  Responsible party in "Entity (Individual)" format. Role is preserved in canonical data but not rendered.
+</ResponseField>
+
+### TemplateActionRow
+
+```typescript
+interface TemplateActionRow {
+  item_id: string;
+  description: string;
+  status: string;
+  assigned_to: string;
+  due_date: string;
+}
+```
+
+### TemplateIssueRow
+
+```typescript
+interface TemplateIssueRow {
+  issue_id: string;
+  title: string;
+  status: string;
+  summary: string;
+  citation: string;  // Latest citation text
+}
+```
+
+## Rendering Logic
+
+### Stage Organization
+
+Documents are organized into four stages in order:
+1. **I. PRE-SIGNING**
+2. **II. SIGNING**
+3. **III. CLOSING**
+4. **IV. POST-CLOSING**
+
+Each stage with entries gets a bold heading row.
+
+### Hierarchical Numbering
+
+Entries are numbered hierarchically:
+- Root entries: `1`, `2`, `3`, ...
+- Child entries: `1.1`, `1.2`, `2.1`, ...
+- Grandchildren: `1.1.1`, `1.1.2`, ...
+
+The number appears in the rendering but not in the template data.
+
+### Indentation
+
+Nested entries are indented using pairs of non-breaking spaces (`\u00A0\u00A0`):
+- Root entry: no indent
+- Depth 1: 2 spaces
+- Depth 2: 4 spaces
+- Sub-rows (citations, signatories, actions, issues): additional 2 spaces
+
+### Status Labels
+
+Internal enum values are converted to human-readable labels:
+
+| Enum Value | Display Label |
+|------------|---------------|
+| `NOT_STARTED` | Not Started |
+| `DRAFT` | Draft |
+| `CIRCULATED` | Circulated |
+| `FORM_FINAL` | Form Final |
+| `PARTIALLY_SIGNED` | Partially Signed |
+| `FULLY_EXECUTED` | Fully Executed |
+| `DELIVERED` | Delivered |
+| `FILED_OR_RECORDED` | Filed or Recorded |
+| `IN_PROGRESS` | In Progress |
+| `COMPLETED` | Completed |
+| `ON_HOLD` | On Hold |
+| `OPEN` | Open |
+| `CLOSED` | Closed |
+| `PENDING` | Pending |
+| `RECEIVED` | Received |
+| `N_A` | N/A |
+
+### Responsible Party Format
+
+Responsible parties are merged into a single column:
+- If both org and individual: `"Organization (Individual)"`
+- If only org: `"Organization"`
+- If only individual: `"Individual"`
+- Role is **not rendered** in DOCX (preserved in canonical data only)
+
+### Linked Items
+
+Action items and issues with `related_document_ids` are rendered as checkbox sub-rows under their linked documents:
+
+```
+[x] Action A-1: Review purchase agreement | Completed | John Smith
+[ ] Issue I-1: Missing exhibit | Open
+```
+
+Checkboxes show:
+- `[x]` for completed actions or closed issues
+- `[ ]` for in-progress/pending items
+
+### Unlinked Items
+
+Action items and issues with no document links appear in separate fallback tables at the end of the document.
+
+## Example Usage
+
+```typescript
+import { buildChecklistTemplateContext } from 'openagreements';
+
+const checklist: ClosingChecklist = {
+  deal_name: 'Acme Acquisition',
+  updated_at: '2026-03-13T10:00:00Z',
+  documents: {
+    'DOC-1': {
+      document_id: 'DOC-1',
+      title: 'Purchase Agreement',
+      primary_link: 'https://docs.example.com/pa.pdf'
+    }
+  },
+  checklist_entries: {
+    'E-1': {
+      entry_id: 'E-1',
+      document_id: 'DOC-1',
+      stage: 'SIGNING',
+      title: 'Purchase Agreement',
+      status: 'FORM_FINAL',
+      responsible_party: {
+        organization: 'Seller',
+        individual_name: 'Jane Doe'
+      },
+      citations: [{
+        text: 'Section 2.3',
+        link: 'https://docs.example.com/pa.pdf#page=5'
+      }],
+      signatories: [{
+        party: 'Buyer',
+        name: 'John Smith',
+        title: 'CEO',
+        status: 'RECEIVED',
+        signature_artifacts: []
+      }]
+    }
+  },
+  action_items: {
+    'A-1': {
+      action_id: 'A-1',
+      description: 'Review purchase agreement',
+      status: 'COMPLETED',
+      assigned_to: { individual_name: 'Legal Team' },
+      related_document_ids: ['DOC-1'],
+      citations: []
+    }
+  },
+  issues: {}
+};
+
+const context = buildChecklistTemplateContext(checklist);
+
+// context.documents will contain:
+// [
+//   { entry_id: '', title: 'II. SIGNING', link: '', status: '', responsible: '' },
+//   { 
+//     entry_id: 'E-1', 
+//     title: 'Purchase Agreement',
+//     link: 'https://docs.example.com/pa.pdf',
+//     status: 'Form Final',
+//     responsible: 'Seller (Jane Doe)'
+//   },
+//   {
+//     entry_id: '',
+//     title: '  Ref: Section 2.3 (https://docs.example.com/pa.pdf#page=5)',
+//     link: '', status: '', responsible: ''
+//   },
+//   {
+//     entry_id: '',
+//     title: '  [x] Signatory: Buyer (John Smith, CEO): Received',
+//     link: '', status: '', responsible: ''
+//   },
+//   {
+//     entry_id: '',
+//     title: '  [x] Action A-1: Review purchase agreement',
+//     link: '', status: 'Completed', responsible: 'Legal Team'
+//   }
+// ]
+```
+
+## Template Integration
+
+Use the context with docx-templates:
+
+```typescript
+import { fillTemplate } from 'openagreements';
+
+const result = await fillTemplate({
+  templatePath: './templates/closing-checklist.docx',
+  data: context,
+  outputPath: './output/checklist.docx'
+});
+```
+
+The template should use `{FOR}` loops:
+
+```
+{FOR document IN documents}
+{document.entry_id} | {document.title} | {document.link} | {document.status} | {document.responsible}
+{END-FOR documents}
+```
+
+## Important Notes
+
+<Warning>
+  The function validates input against `ClosingChecklistSchema` and will throw a `ZodError` if validation fails.
+</Warning>
+
+<Note>
+  Auto-assigned sort keys are ephemeral. If no `sort_key` is provided, entries are assigned incremental values (100, 200, 300) within their stage for consistent ordering.
+</Note>
+
+<Info>
+  The responsible party's `role` field is preserved in canonical data but intentionally omitted from DOCX rendering to maintain a clean two-field format.
+</Info>
+
+## Related Functions
+
+- **importChecklistFromDocx()** - Parse human edits from rendered DOCX back into patches
+- **formatChecklistDocx()** - Higher-level function that wraps template rendering
+- **humanStatus()** - Convert enum status values to display labels
+- **reverseHumanStatus()** - Parse display labels back to enum values

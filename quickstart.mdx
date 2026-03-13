@@ -1,80 +1,195 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quick Start
+description: Get up and running with OpenAgreements in under 2 minutes
 ---
 
-## Get started in three steps
+Get started with OpenAgreements and fill your first legal template in under 2 minutes. No installation required.
 
-Get your documentation site running locally and make your first customization.
+## Prerequisites
 
-### Step 1: Set up your local environment
+You'll need Node.js version 20 or higher installed on your machine.
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+<Info>
+OpenAgreements works best with AI assistants like Claude Code or Gemini, but you can also use it directly from the command line.
+</Info>
 
-### Step 2: Deploy your changes
+## Quick Start with npx (Zero Install)
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+The fastest way to use OpenAgreements is with `npx`, which runs the CLI without requiring installation:
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+<Steps>
+  <Step title="List available templates">
+    See all 28+ available templates:
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```bash
+    npx -y open-agreements@latest list
+    ```
 
-### Step 3: Go live
+    For machine-readable JSON output (useful for AI agents):
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+    ```bash
+    npx -y open-agreements@latest list --json
+    ```
+  </Step>
 
-## Next steps
+  <Step title="Fill a template">
+    Let's fill a Common Paper Mutual NDA. You can provide values inline:
 
-Now that you have your docs running, explore these key features:
+    ```bash
+    npx -y open-agreements@latest fill common-paper-mutual-nda \
+      --set party_1_name="Acme Corp" \
+      --set party_2_name="Beta Inc" \
+      --set purpose="Exploring a potential partnership" \
+      --set effective_date="2024-03-15" \
+      --set governing_law="Delaware" \
+      -o my-nda.docx
+    ```
+
+    Or use a JSON data file:
+
+    ```bash
+    npx -y open-agreements@latest fill common-paper-mutual-nda \
+      -d values.json \
+      -o my-nda.docx
+    ```
+  </Step>
+
+  <Step title="Open your DOCX">
+    Open the generated `my-nda.docx` file in Microsoft Word, Google Docs, or LibreOffice to review and sign.
+
+    <Check>
+    All original formatting, styles, and document structure are preserved!
+    </Check>
+  </Step>
+</Steps>
+
+## Example: Using a JSON Data File
+
+Create a `values.json` file with your template data:
+
+```json values.json
+{
+  "party_1_name": "Acme Corp",
+  "party_2_name": "Beta Inc",
+  "purpose": "Exploring a potential partnership for Widget development",
+  "effective_date": "2024-03-15",
+  "governing_law": "Delaware"
+}
+```
+
+Then fill the template:
+
+```bash
+npx -y open-agreements@latest fill common-paper-mutual-nda \
+  -d values.json \
+  -o acme-beta-nda.docx
+```
+
+## Template Categories
+
+OpenAgreements includes templates across multiple categories:
 
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="NDAs" icon="handshake">
+    Mutual and one-way NDAs from Common Paper and Bonterms
+  </Card>
+  <Card title="Cloud & SaaS" icon="cloud">
+    Service agreements, DPAs, AI addendums, order forms
+  </Card>
+  <Card title="Employment" icon="briefcase">
+    Offer letters, employment agreements, contractor agreements
+  </Card>
+  <Card title="Financing" icon="money-bill">
+    Y Combinator SAFEs and NVCA financing documents
+  </Card>
 </CardGroup>
 
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+## Discovering Template Fields
+
+To see what fields a template requires, use the `list` command with `--json` and filter by template:
+
+```bash
+npx -y open-agreements@latest list --json | \
+  jq '.[] | select(.name == "common-paper-mutual-nda") | .fields'
+```
+
+This shows all fields with their types, descriptions, and whether they're required:
+
+```json
+[
+  {
+    "name": "party_1_name",
+    "type": "text",
+    "description": "Name of the first party",
+    "required": true
+  },
+  {
+    "name": "party_2_name",
+    "type": "text",
+    "description": "Name of the second party",
+    "required": true
+  },
+  {
+    "name": "effective_date",
+    "type": "date",
+    "description": "Effective date of the agreement",
+    "required": true
+  }
+]
+```
+
+## Using with AI Assistants
+
+OpenAgreements works seamlessly with AI assistants. Just ask Claude Code or Gemini to draft an agreement:
+
+<Tabs>
+  <Tab title="Claude Code">
+    ```bash
+    # Install the agent skill
+    npx skills add open-agreements/open-agreements
+    ```
+
+    Then ask Claude:
+    ```
+    Draft an NDA between Acme Corp and Beta Inc
+    ```
+  </Tab>
+
+  <Tab title="Gemini CLI">
+    ```bash
+    # Install the extension
+    gemini extensions install https://github.com/open-agreements/open-agreements
+    ```
+
+    Then ask Gemini to draft an agreement.
+  </Tab>
+
+  <Tab title="Direct Usage">
+    AI assistants can run OpenAgreements directly with npx - no installation needed:
+
+    ```
+    Use npx open-agreements to help me fill a mutual NDA
+    ```
+  </Tab>
+</Tabs>
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Installation" icon="download" href="/installation">
+    Install globally or add as a project dependency
+  </Card>
+  <Card title="CLI Reference" icon="terminal" href="/cli/overview">
+    Explore all CLI commands and options
+  </Card>
+  <Card title="Template Catalog" icon="book" href="/templates/catalog">
+    Browse all 28+ available templates
+  </Card>
+  <Card title="API Documentation" icon="code" href="/api/overview">
+    Use OpenAgreements as a TypeScript library
+  </Card>
+</CardGroup>
+
+<Warning>
+OpenAgreements generates documents from standard templates. It does not provide legal advice. Consult an attorney for legal guidance.
+</Warning>

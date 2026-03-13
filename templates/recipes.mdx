@@ -1,0 +1,574 @@
+---
+title: Recipe System
+description: How the recipe engine works for NVCA templates and other non-redistributable sources
+---
+
+Learn how OpenAgreements handles non-redistributable document sources through the recipe system.
+
+## What Are Recipes?
+
+Recipes enable OpenAgreements to work with **non-redistributable** document sources (like NVCA model financing documents) by hosting only **transformation instructions** instead of the actual documents.
+
+<Info>
+**The Problem:** Some publishers allow free downloads but prohibit redistribution. We can't ship their documents in the npm package.
+
+**The Solution:** Ship a "recipe" — instructions for downloading, cleaning, and patching the source document at runtime.
+</Info>
+
+## How Recipes Work
+
+<Steps>
+  <Step title="Download Source">
+    OpenAgreements downloads the original DOCX from the publisher's website using the `source_url` in the recipe metadata.
+    
+    The download is verified against a SHA-256 hash to ensure integrity.
+  </Step>
+  
+  <Step title="Clean">
+    Remove content that shouldn't appear in the filled output:
+    - Footnotes with drafting notes
+    - Multi-paragraph comment blocks
+    - Preliminary instructions
+    - Headers/footers with "DRAFT" or "MODEL" labels
+    
+    Defined in `clean.json`
+  </Step>
+  
+  <Step title="Patch">
+    Transform source placeholders to OpenAgreements `{tag}` format:
+    - `[Company Name]` → `{company_name}`
+    - `[____________]` + context → `{field_name}`
+    
+    Defined in `replacements.json`
+  </Step>
+  
+  <Step title="Fill">
+    Fill the patched template with user values, just like internal templates.
+  </Step>
+  
+  <Step title="Normalize (Optional)">
+    Apply post-fill cleanup for remaining bracket artifacts:
+    - Trailing `]` from alternative clauses
+    - Unresolved underscore placeholders
+    - Conditional sections that need collapsing
+    
+    Defined in `normalize.json`
+  </Step>
+  
+  <Step title="Verify">
+    Check that no `[brackets]` or unresolved `{tags}` remain in the output.
+  </Step>
+</Steps>
+
+## Recipe Structure
+
+Each recipe is a self-contained directory:
+
+```
+content/recipes/<name>/
+├── metadata.yaml          # Fields, source URL, SHA-256 hash, license note
+├── replacements.json      # Placeholder-to-tag mappings
+├── clean.json            # Content removal rules (optional)
+└── normalize.json        # Post-fill cleanup rules (optional)
+```
+
+<Warning>
+Recipe directories must **never** contain `.docx` files. The source document is copyrighted and must not be committed to the repository.
+</Warning>
+
+## Recipe Files
+
+### metadata.yaml
+
+Defines the source, fields, and licensing:
+
+```yaml
+name: NVCA Model Stock Purchase Agreement
+description: >
+  Series preferred stock purchase agreement for venture capital financings,
+  covering purchase terms, representations, and closing conditions.
+source_url: https://nvca.org/wp-content/uploads/2025/10/NVCA-Model-SPA-10-28-2025-1.docx
+source_version: 10-28-2025
+license_note: >
+  NVCA model documents are freely downloadable but not redistributable.
+  This recipe contains only transformation instructions, not the source document.
+source_sha256: b2c76452fa82dcda72f1fa9f82ba0ce28ea9445441c897f9cb7ac6663930dcab
+optional: false
+fields:
+  - name: company_name
+    type: string
+    description: Full legal name of the company
+  
+  - name: investor_name
+    type: string
+    description: Full name of the investor
+  
+  - name: series_designation
+    type: string
+    description: Series designation (A, B, C, etc.)
+    default: A
+
+required_fields:
+  - company_name
+  - investor_name
+```
+
+**Key fields:**
+- `source_url`: Where to download the source DOCX
+- `source_sha256`: Hash for integrity verification
+- `license_note`: Explains why this is a recipe, not an internal template
+- `source_version`: Publisher's version identifier
+
+### replacements.json
+
+Maps source placeholders to `{tag}` format:
+
+```json
+{
+  "[Company Name]": "{company_name}",
+  "[____________]": "{investor_name}",
+  "among [____________], a Delaware": "among {company_name}, a Delaware",
+  "[____________] (the \u201cInvestor\u201d)": "{investor_name} (the \u201cInvestor\u201d)"
+}
+```
+
+**Important rules:**
+
+<AccordionGroup>
+  <Accordion title="Exact Text Matching" icon="bullseye">
+    Keys must match **actual document text** exactly.
+    
+    **Don't guess.** Always derive keys from:
+    - The `scan` command output
+    - Extracting text from the DOCX
+    
+    Common pitfalls:
+    - Case matters: `[Company Counsel Name]` ≠ `[Company counsel name]`
+    - Brackets vary: `[_____ __, 20___]` vs `[________], 20[__]`
+    - Labels differ: Signature page might say `[Insert Company Name]` while body has `[____________]`
+  </Accordion>
+  
+  <Accordion title="Disambiguating Generic Patterns" icon="magnifying-glass">
+    When the same pattern (e.g., `[____________]`) appears multiple times with different meanings, include surrounding context:
+    
+    ```json
+    {
+      "among [____________], a Delaware": "among {company_name}, a Delaware",
+      "[____________] (the \u201cInvestor\u201d)": "{investor_name} (the \u201cInvestor\u201d)",
+      "by [____________] on behalf": "by {company_counsel_name} on behalf"
+    }
+    ```
+    
+    The patcher performs **surgical replacement**:
+    - Detects common prefix/suffix between key and value
+    - Only modifies the differing middle portion
+    - Preserves formatting on context text
+  </Accordion>
+  
+  <Accordion title="Currency and Percent Fields" icon="dollar-sign">
+    When a template has `$[amount]` (dollar sign outside the brackets):
+    
+    **Replacement:**
+    ```json
+    {
+      "$[amount]": "${purchase_amount}"
+    }
+    ```
+    
+    **User provides:** `$1,000,000`
+    
+    **Without sanitization:** Output would be `$$1,000,000` (double dollar sign)
+    
+    **OpenAgreements handles this automatically:** The `sanitizeCurrencyValues()` utility detects `${field}` patterns and strips leading `$` from user values.
+    
+    Same issue can occur with percent signs (`%[percent]`).
+  </Accordion>
+  
+  <Accordion title="Two Types of Brackets" icon="brackets-square">
+    NVCA documents use brackets for two purposes:
+    
+    1. **Fill-in fields** (should be replaced):
+       - `[Company Name]`
+       - `[____________]`
+       - `[Date]`
+    
+    2. **Optional/alternative clauses** (leave as-is):
+       - `[or consultant (excluding service solely as member of the Board)]`
+       - `[if applicable: and ...]`
+    
+    **Only map fill-in fields** in `replacements.json`. Leave optional clauses alone for the drafter to decide.
+  </Accordion>
+</AccordionGroup>
+
+### clean.json
+
+Removes content that shouldn't appear in the filled output:
+
+```json
+{
+  "removeFootnotes": true,
+  "removeParagraphPatterns": [
+    "^Comment:",
+    "^NOTE:",
+    "^\\[Comment:"
+  ],
+  "removeRanges": [
+    {
+      "start": "^MODEL STOCK PURCHASE AGREEMENT$",
+      "end": "against their own directors and officers\\."
+    },
+    {
+      "start": "^\\[Comment:",
+      "end": "\\]\\s*$"
+    }
+  ],
+  "clearParts": [
+    "word/footer1.xml"
+  ]
+}
+```
+
+**Field reference:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `removeFootnotes` | boolean | Remove all footnotes from `word/footnotes.xml` |
+| `removeParagraphPatterns` | string[] | Regex patterns — any paragraph matching one is removed |
+| `removeRanges` | object[] | Remove all paragraphs from first matching `start` through first subsequent `end` (inclusive) |
+| `clearParts` | string[] | OOXML part paths to clear entirely (e.g., `word/footer1.xml`) |
+
+**Range deletion:**
+
+`removeRanges` is useful for multi-paragraph blocks:
+
+```json
+{
+  "start": "^Preliminary Notes$",
+  "end": "officers and directors\\."
+}
+```
+
+This removes a 12-paragraph "Preliminary Notes" section that would otherwise require 15+ individual patterns.
+
+Each range pattern can match **multiple occurrences** in a document. After removing a range, matching resumes from the next paragraph.
+
+### normalize.json (Optional)
+
+Applies post-fill cleanup for remaining bracket artifacts:
+
+```json
+{
+  "paragraph_rules": [
+    {
+      "id": "fill-company-counsel-name",
+      "section_heading": "Conditions of the Purchasers' Obligations at Closing",
+      "section_heading_any": ["Qualifications"],
+      "paragraph_contains": "The Purchasers shall have received from",
+      "replacements": {
+        "[___________]": "{company_counsel_name}"
+      },
+      "trim_unmatched_trailing_bracket": true
+    }
+  ]
+}
+```
+
+**Rule behavior:**
+
+| Field | Description |
+|-------|-------------|
+| `id` | Unique identifier for the rule |
+| `section_heading` | Primary heading to scope the rule |
+| `section_heading_any` | Optional heading aliases (for version differences) |
+| `paragraph_contains` | Required anchor — rule only applies if paragraph contains this text |
+| `replacements` | Token replacements; `{field_name}` is resolved from fill values or `_______` if missing |
+| `trim_unmatched_trailing_bracket` | Remove dangling trailing `]` after replacement |
+
+**Why normalize.json?**
+
+Some NVCA documents have:
+- Bracket artifacts that can't be detected during patch (context-dependent)
+- Alternative clauses where one branch should be chosen
+- Placeholders that only make sense after other fields are filled
+
+`normalize.json` keeps cleanup **declarative and versionable** instead of using brittle ad hoc scripts.
+
+## Guidance Extraction
+
+Source documents often contain expert commentary:
+- Footnotes explaining legal implications
+- `[Comment: ...]` blocks with drafting guidance
+- Preliminary notes from domain specialists (e.g., securities lawyers)
+
+The cleaner removes this content to produce a fillable document, but the knowledge is valuable for anyone filling the form.
+
+### How It Works
+
+The `--extract-guidance` flag on `recipe clean` captures all removed content **before** deleting it:
+
+```bash
+open-agreements recipe clean source.docx \
+  -o cleaned.docx \
+  --recipe nvca-indemnification-agreement \
+  --extract-guidance guidance.json
+```
+
+### Output Format
+
+```json
+{
+  "extractedFrom": {
+    "sourceHash": "f9b61b4d99e245573de41d9469925b4332f871ec",
+    "configHash": "b77c2d27a1b56e8f9c3d4e5f6a7b8c9d"
+  },
+  "entries": [
+    {
+      "source": "range",
+      "part": "word/document.xml",
+      "index": 0,
+      "text": "MODEL INDEMNIFICATION AGREEMENT\n\nPreliminary Notes: This agreement provides ...",
+      "groupId": "range-0"
+    },
+    {
+      "source": "pattern",
+      "part": "word/document.xml",
+      "index": 12,
+      "text": "Comment: This section addresses indemnification for breaches of fiduciary duty."
+    },
+    {
+      "source": "footnote",
+      "part": "word/footnotes.xml",
+      "index": 40,
+      "text": "See Delaware General Corporation Law § 145 for statutory indemnification requirements."
+    }
+  ]
+}
+```
+
+**Entry fields:**
+
+| Field | Description |
+|-------|-------------|
+| `source` | How content was removed: `footnote`, `pattern`, or `range` |
+| `part` | OOXML part the content came from |
+| `index` | Global extraction order (preserves document position) |
+| `text` | The removed text content |
+| `groupId` | Shared identifier for entries from the same range match (range entries only) |
+
+### Staleness Detection
+
+The `extractedFrom` object contains SHA-256 hashes:
+- `sourceHash`: Hash of the source DOCX
+- `configHash`: Hash of the `clean.json` config
+
+If either changes, the guidance should be re-extracted.
+
+### Why Programmatic Extraction?
+
+<Check>
+- **Single source of truth:** The source document is authoritative
+- **Zero manual effort:** Re-run extraction after publisher update
+- **Exact language:** Preserves domain expert commentary verbatim
+- **Captures everything:** AI can summarize on the fly, but cannot recover discarded content
+</Check>
+
+<Warning>
+**Licensing:** Extracted guidance contains verbatim source text. For non-redistributable sources (like NVCA), the guidance file must **NOT** be committed or shipped in the npm package. It is a **local-only, authoring-time** artifact generated on the user's machine.
+</Warning>
+
+## Working with Recipes
+
+### Scan a Source Document
+
+Discover all bracketed placeholders:
+
+```bash
+open-agreements scan ~/Downloads/source-document.docx
+```
+
+Output includes:
+- Short placeholders (likely fill-in fields)
+- Long alternative clauses (typically left as-is)
+- Split-run placeholders (where Word splits text across XML)
+- Footnote count
+
+Generate a draft `replacements.json`:
+
+```bash
+open-agreements scan ~/Downloads/source-document.docx \
+  --output-replacements replacements-draft.json
+```
+
+### Test Recipe Stages
+
+Test each stage of the pipeline:
+
+```bash
+# Clean only
+open-agreements recipe clean source.docx \
+  -o cleaned.docx \
+  --recipe nvca-stock-purchase-agreement
+
+# Patch only (on already-cleaned document)
+open-agreements recipe patch cleaned.docx \
+  -o patched.docx \
+  --recipe nvca-stock-purchase-agreement
+
+# Full pipeline with intermediate files kept
+open-agreements recipe run nvca-stock-purchase-agreement \
+  -d values.json \
+  -o output.docx \
+  --keep-intermediate
+```
+
+### Validate a Recipe
+
+```bash
+# Validate specific recipe
+open-agreements validate nvca-stock-purchase-agreement
+
+# Validate all templates and recipes
+open-agreements validate
+```
+
+## Field Handling in Recipes
+
+Fields in recipe `metadata.yaml` control **default values for unfilled placeholders**:
+
+### No Default (Required)
+
+```yaml
+- name: company_name
+  type: string
+  description: Full legal name
+```
+
+If not provided during fill → renders as `_______` (visible placeholder)
+
+### Default Value
+
+```yaml
+- name: judicial_district
+  type: string
+  description: Federal judicial district
+  default: District of Delaware
+```
+
+If not provided → uses "District of Delaware"
+
+### Explicit Empty (Optional)
+
+```yaml
+- name: amended_restated
+  type: string
+  description: "Amended and Restated" or empty
+  default: ""
+```
+
+If not provided → becomes invisible (not `_______`)
+
+## NVCA Recipe Catalog
+
+OpenAgreements includes 7 NVCA model financing documents:
+
+<AccordionGroup>
+  <Accordion title="NVCA Stock Purchase Agreement" icon="file-contract">
+    **CLI Name:** `nvca-stock-purchase-agreement`  
+    **Version:** 10-28-2025
+    
+    Series preferred stock purchase agreement covering purchase terms, representations, warranties, and closing conditions.
+    
+    **Recipe features:**
+    - Removes footnotes and drafting comments
+    - Cleans 12-paragraph preliminary notes
+    - Handles alternative dispute resolution clauses (arbitration vs courts)
+    - Post-fill normalization for bracket artifacts
+  </Accordion>
+  
+  <Accordion title="NVCA Certificate of Incorporation" icon="stamp">
+    **CLI Name:** `nvca-certificate-of-incorporation`  
+    **Version:** 2020
+    
+    Amended and Restated Certificate of Incorporation for venture-backed Delaware corporations.
+  </Accordion>
+  
+  <Accordion title="NVCA Investors Rights Agreement" icon="user-shield">
+    **CLI Name:** `nvca-investors-rights-agreement`  
+    **Version:** 2020
+    
+    Investors Rights Agreement covering registration rights, information rights, and observer rights.
+  </Accordion>
+  
+  <Accordion title="NVCA Voting Agreement" icon="check-to-slot">
+    **CLI Name:** `nvca-voting-agreement`  
+    **Version:** 2020
+    
+    Voting Agreement for board composition and drag-along rights.
+  </Accordion>
+  
+  <Accordion title="NVCA ROFR and Co-Sale Agreement" icon="arrow-right-arrow-left">
+    **CLI Name:** `nvca-rofr-co-sale-agreement`  
+    **Version:** 2020
+    
+    Right of First Refusal and Co-Sale Agreement for secondary transfer restrictions.
+  </Accordion>
+  
+  <Accordion title="NVCA Management Rights Letter" icon="user-tie">
+    **CLI Name:** `nvca-management-rights-letter`  
+    **Version:** 2020
+    
+    Management Rights Letter for ERISA compliance and fund requirements.
+  </Accordion>
+  
+  <Accordion title="NVCA Indemnification Agreement" icon="shield">
+    **CLI Name:** `nvca-indemnification-agreement`  
+    **Version:** 2020
+    
+    Director and officer indemnification agreement providing indemnification and advancement of expenses.
+  </Accordion>
+</AccordionGroup>
+
+## Known Limitations
+
+<Warning>
+**Not currently handled:**
+- Tracked changes in source documents
+- Content controls (structured document tags)
+- Textboxes
+
+**Handled correctly:**
+- Headers and footers
+- Endnotes
+- Tables
+- All general OOXML text parts
+</Warning>
+
+## Creating a New Recipe
+
+See the full guide at [Adding Recipes (Source Docs)](/templates/recipes) for step-by-step instructions on:
+
+1. Scanning the source document
+2. Creating the recipe directory
+3. Writing `metadata.yaml`, `replacements.json`, `clean.json`, `normalize.json`
+4. Testing and validating
+5. Submitting a pull request
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Template Catalog" icon="grid" href="/templates/catalog">
+    Browse all templates including NVCA recipes
+  </Card>
+  
+  <Card title="Adding Recipes" icon="plus" href="/templates/recipes">
+    Create a new recipe for a non-redistributable source
+  </Card>
+  
+  <Card title="CLI: Recipe Commands" icon="terminal" href="/cli/recipe">
+    Reference for recipe CLI commands
+  </Card>
+  
+  <Card title="Templates Overview" icon="book" href="/templates/overview">
+    Learn about internal and external templates
+  </Card>
+</CardGroup>
